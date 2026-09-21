@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>3D Optics Lab — Ray Tracing Sandbox</title>
+<style>
+  :root{
+    --bg:#070910; --panel:rgba(14,18,32,.92); --line:#1e2740; --txt:#c9d6ee;
+    --dim:#7c8aa8; --acc:#4dd2ff; --acc2:#ff7ad9;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas{display:block}
+  #panel{
+    position:fixed;top:10px;left:10px;width:296px;max-height:calc(100% - 20px);
+    overflow-y:auto;background:var(--panel);backdrop-filter:blur(12px);
+    border:1px solid var(--line);border-radius:14px;padding:12px;z-index:10;
+    box-shadow:0 18px 50px rgba(0,0,0,.6);
+  }
+  #panel::-webkit-scrollbar{width:8px}
+  #panel::-webkit-scrollbar-thumb{background:#22304f;border-radius:4px}
+  h1{font-size:14px;margin:0 0 10px;letter-spacing:.5px;color:#fff;font-weight:600}
+  h1 span{color:var(--acc)}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);
+     margin:14px 0 7px;font-weight:600}
+  h2:first-of-type{margin-top:4px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0}
+  .row label{color:var(--dim);font-size:12px;flex:1}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:#243252;
+    border-radius:2px;flex:1.2;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+    border-radius:50%;background:var(--acc);cursor:pointer;box-shadow:0 0 8px rgba(77,210,255,.7)}
+  input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;
+    background:var(--acc);cursor:pointer}
+  select{background:#141c2e;color:var(--txt);border:1px solid var(--line);border-radius:7px;
+    padding:4px 6px;font-size:12px;flex:1.2;outline:none}
+  .val{font-variant-numeric:tabular-nums;color:var(--acc);font-size:11px;min-width:42px;text-align:right}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  button{background:#161f34;color:var(--txt);border:1px solid var(--line);border-radius:8px;
+    padding:7px 6px;font-size:11.5px;cursor:pointer;transition:.15s;font-family:inherit}
+  button:hover{background:#1f2c4a;border-color:#31456e;color:#fff}
+  button.danger{background:#2a1520;border-color:#4a2030;color:#ff9db0}
+  button.danger:hover{background:#3a1b2b}
+  .hint{color:var(--dim);font-size:11.5px;font-style:italic;padding:4px 0}
+  .pill{display:inline-block;padding:2px 7px;border-radius:20px;background:#182238;
+    border:1px solid var(--line);font-size:10.5px;color:var(--acc);margin-bottom:6px}
+  #hud{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--dim);z-index:10;
+    text-align:right;line-height:1.6;pointer-events:none}
+  #hud b{color:var(--acc);font-weight:500}
+  hr{border:0;border-top:1px solid var(--line);margin:11px 0}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="panel">
+  <h1>3D <span>Optics</span> Lab</h1>
+
+  <h2>Light Source</h2>
+  <div class="row"><label>Type</label>
+    <select id="srcType">
+      <option value="white">White light (broadband)</option>
+      <option value="650">Red laser · 650 nm</option>
+      <option value="532">Green laser · 532 nm</option>
+      <option value="473">Blue laser · 473 nm</option>
+      <option value="405">Violet laser · 405 nm</option>
+    </select></div>
+  <div class="row"><label>Polarization</label>
+    <select id="srcPol">
+      <option value="unpol">Unpolarized</option>
+      <option value="lin">Linear</option>
+    </select></div>
+  <div class="row"><label>Beam radius</label><input type="range" id="srcRadius" min="0" max="1.2" step="0.02" value="0.35"><span class="val" id="vRadius">0.35</span></div>
+  <div class="row"><label>Ray count</label><input type="range" id="srcRays" min="1" max="13" step="1" value="5"><span class="val" id="vRays">5</span></div>
+  <div class="row"><label>Divergence</label><input type="range" id="srcSpread" min="0" max="20" step="1" value="0"><span class="val" id="vSpread">0°</span></div>
+
+  <h2>Add Component</h2>
+  <div class="grid">
+    <button data-add="mirror">Mirror</button>
+    <button data-add="curvedmirror">Concave mirror</button>
+    <button data-add="beamsplitter">Beam splitter</button>
+    <button data-add="polarizer">Polarizer</button>
+    <button data-add="halfwave">½-wave plate</button>
+    <button data-add="quarterwave">¼-wave plate</button>
+    <button data-add="lens">Lens</button>
+    <button data-add="prism">Prism</button>
+    <button data-add="block">Glass block</button>
+    <button data-add="filter">Color filter</button>
+  </div>
+
+  <h2>Environment</h2>
+  <div class="row"><label>Ambient medium</label>
+    <select id="ambient"></select></div>
+
+  <h2>Selected Object</h2>
+  <div id="inspector"><div class="hint">Click an object in the scene to edit it. Drag to move. Shift+drag to raise/lower. Delete key removes it.</div></div>
+</div>
+
+<div id="hud">
+  <div><b id="hudSegs">0</b> ray segments</div>
+  <div>Drag = orbit · Scroll = zoom · Right-drag = pan</div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================
+   0.  SCENE / RENDERER
+   ============================================================ */
+const canvas   = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x070910);
+scene.fog = new THREE.Fog(0x070910, 26, 55);
+
+const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 500);
+camera.position.set(8, 7.5, 11);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 2, 0.5);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.minDistance = 3;
+controls.maxDistance = 45;
+
+scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x0a0e18, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(8, 14, 6); scene.add(key);
+const fill = new THREE.DirectionalLight(0x6fa8ff, 0.7); fill.position.set(-10, 6, -8); scene.add(fill);
+
+// Table / grid
+const grid = new THREE.GridHelper(40, 40, 0x1e2b48, 0x111a2c);
+grid.position.y = 0;
+scene.add(grid);
+const floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(40,40),
+  new THREE.MeshStandardMaterial({color:0x0a0e18, roughness:0.9, metalness:0.1})
+);
+floor.rotation.x = -Math.PI/2; floor.position.y = -0.01; scene.add(floor);
+
+/* ============================================================
+   1.  MEDIA  (Cauchy dispersion:  n(λ) = A + B/λ² , λ in µm)
+   ============================================================ */
+const MEDIA = {
+  vacuum : { label:'Vacuum',            A:1.0000, B:0.0000 },
+  air    : { label:'Air',               A:1.00029,B:0.0000 },
+  water  : { label:'Water',             A:1.3230, B:0.0032 },
+  glass  : { label:'Crown glass (BK7)', A:1.5046, B:0.0042 },
+  flint  : { label:'Flint glass (dense)',A:1.6000,B:0.0120 },
+  diamond: { label:'Diamond',           A:2.3800, B:0.0080 },
+};
+function nOf(medium, wlNm){
+  const um = wlNm / 1000;
+  return medium.A + medium.B / (um*um);
+}
+
+/* ============================================================
+   2.  SMALL MATH / COLOR HELPERS
+   ============================================================ */
+const V = (x=0,y=0,z=0) => new THREE.Vector3(x,y,z);
+const clamp = (x,a,b) => Math.min(b, Math.max(a,x));
+
+// complex helpers ( [re, im] )
+const cmul  = (a,b) => [a[0]*b[0]-a[1]*b[1], a[0]*b[1]+a[1]*b[0]];
+const cadd  = (a,b) => [a[0]+b[0], a[1]+b[1]];
+const cconj = (a)   => [a[0], -a[1]];
+
+/* Coherency matrix J = <E E†> stored as {ss, pp, sp:[re,im]} (ss,pp real) */
+function J_unpolarized(I=1){ return {ss:I*0.5, pp:I*0.5, sp:[0,0]}; }
+function J_linear(I, ex, ey){ return {ss:I*ex*ex, pp:I*ey*ey, sp:[I*ex*ey, 0]}; }
+function J_intensity(J){ return J.ss + J.pp; }
+
+function J_scale(J, k1, k2){       // diagonal real scaling (Fresnel)
+  return { ss:J.ss*k1*k1, pp:J.pp*k2*k2, sp:[J.sp[0]*k1*k2, J.sp[1]*k1*k2] };
+}
+function J_rotate(J, phi){         // rotate polarization basis by phi about propagation axis
+  const c = Math.cos(phi), s = Math.sin(phi);
+  return {
+    ss: c*c*J.ss + s*s*J.pp + 2*c*s*J.sp[0],
+    pp: s*s*J.ss + c*c*J.pp - 2*c*s*J.sp[0],
+    sp: [ c*s*(J.pp-J.ss) + (c*c-s*s)*J.sp[0], J.sp[1] ]
+  };
+}
+function J_apply(J, U){            // J' = U J U†   (U = 2x2 of [re,im])
+  const Jm = [[[J.ss,0], J.sp], [cconj(J.sp), [J.pp,0]]];
+  const out = [[[0,0],[0,0]],[[0,0],[0,0]]];
+  for (let i=0;i<2;i++) for (let j=0;j<2;j++){
+    let acc = [0,0];
+    for (let k=0;k<2;k++) for (let l=0;l<2;l++)
+      acc = cadd(acc, cmul(cmul(U[i][k], Jm[k][l]), cconj(U[j][l])));
+    out[i][j] = acc;
+  }
+  return { ss: out[0][0][0], pp: out[1][1][0], sp: out[0][1] };
+}
+
+/* Wavelength (nm) → linear-ish RGB */
+function wavelengthToRGB(wl){
+  let r=0,g=0,b=0;
+  if      (wl>=380 && wl<440){ r=-(wl-440)/60; b=1; }
+  else if (wl<490)           { g=(wl-440)/50;  b=1; }
+  else if (wl<510)           { g=1; b=-(wl-510)/20; }
+  else if (wl<580)           { r=(wl-510)/70;  g=1; }
+  else if (wl<645)           { r=1; g=-(wl-645)/65; }
+  else if (wl<=780)          { r=1; }
+  let f=1;
+  if      (wl>=380 && wl<420) f = 0.35 + 0.65*(wl-380)/40;
+  else if (wl>700 && wl<=780) f = 0.35 + 0.65*(780-wl)/80;
+  const ga = 0.85;
+  return [Math.pow(r*f,ga), Math.pow(g*f,ga), Math.pow(b*f,ga)];
+}
+
+function arbitraryPerp(d){
+  const a = Math.abs(d.x) < 0.9 ? V(1,0,0) : V(0,1,0);
+  return V().crossVectors(d, a).normalize();
+}
+
+/* ============================================================
+   3.  COMPONENT REGISTRY & BUILDERS
+   ============================================================ */
+const components = [];
+let nextId = 1;
+let selected   = null;
+
+function clearGroup(g){
+  while (g.children.length){
+    const c = g.children.pop();
+    if (c.geometry) c.geometry.dispose();
+    if (c.material){ Array.isArray(c.material)? c.material.forEach(m=>m.dispose()) : c.material.dispose(); }
+  }
+}
+
+function plateMesh(w,h,color,o={}){
+  const geo = new THREE.BoxGeometry(w,h, o.thickness ?? 0.06);
+  const mat = new THREE.MeshStandardMaterial({
+    color, metalness:o.metalness ?? 0.15, roughness:o.roughness ?? 0.25,
+    transparent:!!o.transparent, opacity:o.opacity ?? 1,
+    emissive: o.emissive ?? 0x000000, emissiveIntensity:0.6
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+/* ---- Mirror ---- */
+function buildMirror(comp){
+  clearGroup(comp.group);
+  const w=2.0, h=2.0;
+  const m = plateMesh(w,h,0xd8e8ff,{metalness:1, roughness:0.04, thickness:0.08});
+  m.position.z = 0.04;
+  comp.group.add(m);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(w+0.14,h+0.14,0.03),
+                new THREE.MeshStandardMaterial({color:0x2b3a55, roughness:0.6, metalness:0.4}));
+  frame.position.z = -0.02; comp.group.add(frame);
+  comp.localSurfaces = [{
+    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
+    behavior:'mirror', reflectivity: comp.params.reflectivity
+  }];
+}
+
+/* ---- Concave mirror ---- */
+function buildCurvedMirror(comp){
+  clearGroup(comp.group);
+  const A = comp.params.aperture, R = comp.params.curvature;
+  const thMax = Math.asin(clamp(A/R,0,1));
+  const geo = new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, 0, thMax);
+  geo.rotateX(-Math.PI/2);
+  geo.translate(0,0,R);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+    color:0xd8e8ff, metalness:1, roughness:0.05, side:THREE.DoubleSide
+  }));
+  comp.group.add(mesh);
+  comp.localSurfaces = [{
+    kind:'sphere', c:V(0,0,R), R, axis:V(0,0,-1), aperture:A,
+    behavior:'mirror', reflectivity: comp.params.reflectivity
+  }];
+}
+
+/* ---- Beam splitter ---- */
+function buildBeamsplitter(comp){
+  clearGroup(comp.group);
+  const w=1.8, h=1.8;
+  const m = plateMesh(w,h,0x8fe6ff,{metalness:0.05, roughness:0.02, transparent:true, opacity:0.28, thickness:0.05, emissive:0x0a3a4a});
+  m.position.z = 0.025; comp.group.add(m);
+  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.1,h+0.1,0.02),
+             new THREE.MeshStandardMaterial({color:0x22334d, roughness:0.7}));
+  comp.group.add(fr);
+  comp.localSurfaces = [{
+    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
+    behavior:'split', reflectivity: comp.params.reflectivity
+  }];
+}
+
+/* ---- Polarizer / Waveplate helper ---- */
+function buildAxisPlate(comp, color, opacity, retardanceDeg){
+  clearGroup(comp.group);
+  const w=1.8, h=1.8;
+  const m = plateMesh(w,h,color,{metalness:0.05, roughness:0.35, transparent:true, opacity, thickness:0.04});
+  comp.group.add(m);
+  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.12,h+0.12,0.02),
+             new THREE.MeshStandardMaterial({color:0x22334d, roughness:0.7}));
+  fr.position.z = -0.03; comp.group.add(fr);
+
+  // transmission / fast axis indicator
+  const ang = comp.params.angle * Math.PI/180;
+  const L = w*0.44;
+  const pts = [ V(-Math.cos(ang)*L, -Math.sin(ang)*L, 0.05),
+                V( Math.cos(ang)*L,  Math.sin(ang)*L, 0.05) ];
+  const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+  comp.group.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({color:0xffd166})));
+  // double arrow for waveplates
+  if (retardanceDeg !== null){
+    const p2 = [ V(-Math.sin(ang)*L*0.75, Math.cos(ang)*L*0.75, 0.05),
+                 V( Math.sin(ang)*L*0.75,-Math.cos(ang)*L*0.75, 0.05) ];
+    comp.group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(p2),
+                  new THREE.LineBasicMaterial({color:0x8affc1})));
+  }
+  return { w, h };
+}
+
+function buildPolarizer(comp){
+  const {w,h} = buildAxisPlate(comp, 0x4a5a80, 0.45, null);
+  const ang = comp.params.angle * Math.PI/180;
+  comp.localSurfaces = [{
+    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
+    behavior:'polarizer', axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
+  }];
+}
+
+function buildHalfWave(comp){
+  const {w,h} = buildAxisPlate(comp, 0x5a4a80, 0.42, 180);
+  const ang = comp.params.angle * Math.PI/180;
+  comp.localSurfaces = [{
+    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
+    behavior:'waveplate', retardance: Math.PI, axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
+  }];
+}
+function buildQuarterWave(comp){
+  const {w,h} = buildAxisPlate(comp, 0x4a805a, 0.42, 90);
+  const ang = comp.params.angle * Math.PI/180;
+  comp.localSurfaces = [{
+    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
+    behavior:'waveplate', retardance: Math.PI/2, axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
+  }];
+}
+
+/* ---- Lens (biconvex, two spherical caps) ---- */
+function buildLens(comp){
+  clearGroup(comp.group);
+  const A = comp.params.aperture;
+  const R = comp.params.curvature;
+  const t  = 2*(R - Math.sqrt(R*R - A*A));
+  const zc1 = -t/2 + R, zc2 = t/2 - R;
+
+  const pts = [];
+  const N = 26;
+  for (let i=0;i<=N;i++){ const r = A*i/N; pts.push(new THREE.Vector2(r, zc1 - Math.sqrt(R*R - r*r))); }
+  for (let i=N;i>=0;i--){ const r = A*i/N; pts.push(new THREE.Vector2(r, zc2 + Math.sqrt(R*R - r*r))); }
+  const geo = new THREE.LatheGeometry(pts, 56);
+  geo.rotateX(Math.PI/2);
+
+  const mat = new THREE.MeshPhysicalMaterial({
+    color:0xbfe4ff, metalness:0, roughness:0.04,
+    transparent:true, opacity:0.30, side:THREE.DoubleSide,
+    clearcoat:1, clearcoatRoughness:0.05
+  });
+  comp.group.add(new THREE.Mesh(geo, mat));
+
+  comp.localSurfaces = [
+    { kind:'sphere', c:V(0,0,zc1), R, axis:V(0,0,-1), aperture:A, behavior:'dielectric' },
+    { kind:'sphere', c:V(0,0,zc2), R, axis:V(0,0, 1), aperture:A, behavior:'dielectric' },
+  ];
+}
+
+/* ---- Prism (equilateral triangular prism along Y) ---- */
+function buildPrism(comp){
+  clearGroup(comp.group);
+  const side = 2.0, height = 2.0;
+  const Rt = side/Math.sqrt(3);
+  const geo = new THREE.CylinderGeometry(Rt, Rt, height, 3, 1);
+  const mat = new THREE.MeshPhysicalMaterial({
+    color:0xcfe8ff, metalness:0, roughness:0.03,
+    transparent:true, opacity:0.28, side:THREE.DoubleSide,
+    clearcoat:1, clearcoatRoughness:0.04
+  });
+  comp.group.add(new THREE.Mesh(geo, mat));
+
+  const verts = [];
+  for (let i=0;i<3;i++){
+    const a = i*2*Math.PI/3;
+    verts.push(V(Rt*Math.sin(a), 0, Rt*Math.cos(a)));
+  }
+  comp.localSurfaces = [];
+  for (let i=0;i<3;i++){
+    const v1 = verts[i], v2 = verts[(i+1)%3];
+    const mid = v1.clone().add(v2).multiplyScalar(0.5);
+    const e = v2.clone().sub(v1).normalize();
+    const nrm = mid.clone().normalize();
+    comp.localSurfaces.push({
+      kind:'rect', o:mid, e1:e, e2:V(0,1,0), h1:side/2, h2:height/2, n:nrm,
+      behavior:'dielectric'
+    });
+  }
+}
+
+/* ---- Rectangular glass block ---- */
+function buildBlock(comp){
+  clearGroup(comp.group);
+  const s = comp.params.size;
+  const w=s, h=s, d=s;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshPhysicalMaterial({color:0xcfe8ff, metalness:0, roughness:0.05,
+      transparent:true, opacity:0.22, side:THREE.DoubleSide, clearcoat:1}));
+  comp.group.add(mesh);
+  comp.localSurfaces = [
+    {o:V( w/2,0,0), e1:V(0,0,1), e2:V(0,1,0), h1:d/2, h2:h/2, n:V( 1,0,0)},
+    {o:V(-w/2,0,0), e1:V(0,0,-1),e2:V(0,1,0), h1:d/2, h2:h/2, n:V(-1,0,0)},
+    {o:V(0, h/2,0), e1:V(1,0,0), e2:V(0,0,1), h1:w/2, h2:d/2, n:V(0, 1,0)},
+    {o:V(0,-h/2,0), e1:V(1,0,0), e2:V(0,0,-1),h1:w/2, h2:d/2, n:V(0,-1,0)},
+    {o:V(0,0, d/2), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0, 1)},
+    {o:V(0,0,-d/2), e1:V(-1,0,0),e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,-1)},
+  ].forEach(s2 => { s2.kind='rect'; s2.behavior='dielectric'; comp.localSurfaces.push(s2); });
+  comp.localSurfaces = comp.localSurfaces.filter(x=>x.kind==='rect');
+}
+
+/* ---- Color filter ---- */
+const FILTERS = {
+  red  : wl => wl > 585 ? 0.95 : Math.max(0, 0.95*(1-(585-wl)/70)),
+  green: wl => 0.95*Math.exp(-Math.pow((wl-535)/48, 2)),
+  blue : wl => wl < 487 ? 0.95 : Math.max(0, 0.95*(1-(wl-487)/70)),
+};
+function buildFilter(comp){
+  clearGroup(comp.group);
+  const w=1.8, h=1.8;
+  const col = {red:0xff4444, green:0x44ff77, blue:0x4488ff}[comp.params.color];
+  const m = plateMesh(w,h,col,{transparent:true, opacity:0.35, roughness:0.15, thickness:0.06, emissive:col});
+  comp.group.add(m);
+  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.12,h+0.12,0.02),
+             new THREE.MeshStandardMaterial({color:0x22334d, roughness:0.7}));
+  fr.position.z=-0.04; comp.group.add(fr);
+  comp.localSurfaces = [{
+    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
+    behavior:'filter', transmit: FILTERS[comp.params.color]
+  }];
+}
+
+/* ---- Registry ---- */
+const COMPONENT_TYPES = {
+  mirror: {
+    label:'Mirror', build:buildMirror,
+    defaults:{ reflectivity:0.95 },
+    defs:[{key:'reflectivity', label:'Reflectivity', type:'range', min:0.05, max:1, step:0.01}]
+  },
+  curvedmirror: {
+    label:'Concave mirror', build:buildCurvedMirror,
+    defaults:{ aperture:0.85, curvature:2.6, reflectivity:0.95 },
+    defs:[
+      {key:'aperture', label:'Aperture', type:'range', min:0.2, max:1.6, step:0.05},
+      {key:'curvature', label:'Curvature R', type:'range', min:1.2, max:6, step:0.1},
+      {key:'reflectivity', label:'Reflectivity', type:'range', min:0.05, max:1, step:0.01}
+    ]
+  },
+  beamsplitter: {
+    label:'Beam splitter', build:buildBeamsplitter,
+    defaults:{ reflectivity:0.5 },
+    defs:[{key:'reflectivity', label:'Reflectance', type:'range', min:0, max:1, step:0.01}]
+  },
+  polarizer: {
+    label:'Polarizer', build:buildPolarizer,
+    defaults:{ angle:0 },
+    defs:[{key:'angle', label:'Axis angle', type:'range', min:0, max:180, step:5, unit:'°'}]
+  },
+  halfwave: {
+    label:'Half-wave plate', build:buildHalfWave,
+    defaults:{ angle:0 },
+    defs:[{key:'angle', label:'Fast axis', type:'range', min:0, max:180, step:5, unit:'°'}]
+  },
+  quarterwave: {
+    label:'Quarter-wave plate', build:buildQuarterWave,
+    defaults:{ angle:0 },
+    defs:[{key:'angle', label:'Fast axis', type:'range', min:0, max:180, step:5, unit:'°'}]
+  },
+  lens: {
+    label:'Lens', build:buildLens,
+    defaults:{ aperture:0.7, curvature:2.5, material:'glass' },
+    defs:[
+      {key:'aperture', label:'Aperture', type:'range', min:0.25, max:1.3, step:0.05},
+      {key:'curvature', label:'Curvature R', type:'range', min:1.2, max:6, step:0.1},
+      {key:'material', label:'Material', type:'material'}
+    ]
+  },
+  prism: {
+    label:'Prism', build:buildPrism,
+    defaults:{ material:'flint' },
+    defs:[{key:'material', label:'Material', type:'material'}]
+  },
+  block: {
+    label:'Glass block', build:buildBlock,
+    defaults:{ size:1.6, material:'glass' },
+    defs:[
+      {key:'size', label:'Size', type:'range', min:0.6, max:3, step:0.1},
+      {key:'material', label:'Material', type:'material'}
+    ]
+  },
+  filter: {
+    label:'Color filter', build:buildFilter,
+    defaults:{ color:'red' },
+    defs:[{key:'color', label:'Passes', type:'select',
+      options:[['red','Red'],['green','Green'],['blue','Blue']]}]
+  }
+};
+
+function addComponent(type, pos, rotY){
+  const def = COMPONENT_TYPES[type];
+  const comp = {
+    id: nextId++, type, label: def.label,
+    group: new THREE.Group(),
+    params: Object.assign({}, def.defaults),
+    material: MEDIA[def.defaults.material || 'glass'],
+    localSurfaces: [],
+    defs: def.defs || []
+  };
+  if (pos) comp.group.position.copy(pos);
+  if (rotY !== undefined) comp.group.rotation.y = rotY;
+  comp.group.userData.comp = comp;
+  scene.add(comp.group);
+  components.push(comp);
+  def.build(comp);
+  return comp;
+}
+
+function rebuild(comp){
+  const def = COMPONENT_TYPES[comp.type];
+  comp.material = MEDIA[comp.params.material || 'glass'];
+  def.build(comp);
+  scheduleTrace();
+}
+
+/* ============================================================
+   4.  LIGHT SOURCE
+   ============================================================ */
+const sourceGroup = new THREE.Group();
+sourceGroup.position.set(0, 2, -5.5);
+scene.add(sourceGroup);
+
+const srcBody = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.28, 0.28, 0.7, 24),
+  new THREE.MeshStandardMaterial({color:0x2a3a58, metalness:0.85, roughness:0.25})
+);
+srcBody.rotation.x = Math.PI/2;
+sourceGroup.add(srcBody);
+const srcLens = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.22, 0.22, 0.06, 24),
+  new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:1.4})
+);
+srcLens.rotation.x = Math.PI/2; srcLens.position.z = 0.36;
+sourceGroup.add(srcLens);
+// aim indicator
+const aim = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.012,0.012,1.6,8),
+  new THREE.MeshBasicMaterial({color:0x2f4a70, transparent:true, opacity:0.6})
+);
+aim.rotation.x = Math.PI/2; aim.position.z = 1.1;
+sourceGroup.add(aim);
+
+const sourceState = {
+  type:'white', pol:'unpol', radius:0.35, rays:5, spread:0,
+  get group(){ return sourceGroup; }
+};
+sourceGroup.userData.comp = sourceState;
+sourceState.label = 'Light source';
+sourceState.defs = [];
+sourceState.params = {};
+
+/* ============================================================
+   5.  SURFACE COLLECTION & INTERSECTION
+   ============================================================ */
+const EPS = 1e-6;
+
+function collectSurfaces(){
+  scene.updateMatrixWorld(true);
+  const out = [];
+  for (const comp of components){
+    const M  = comp.group.matrixWorld;
+    const NM = new THREE.Matrix3().getNormalMatrix(M);
+    for (const s of comp.localSurfaces){
+      const ws = { comp, behavior:s.behavior };
+      if (s.kind === 'rect'){
+        ws.kind = 'rect';
+        ws.o  = s.o.clone().applyMatrix4(M);
+        ws.e1 = s.e1.clone().applyMatrix3(NM).normalize();
+        ws.e2 = s.e2.clone().applyMatrix3(NM).normalize();
+        ws.n  = s.n.clone().applyMatrix3(NM).normalize();
+        ws.h1 = s.h1; ws.h2 = s.h2;
+        if (s.axisLocal) ws.axisWorld = s.axisLocal.clone().applyMatrix3(NM).normalize();
+        if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
+        if (s.retardance  !== undefined) ws.retardance  = s.retardance;
+        if (s.transmit    !== undefined) ws.transmit    = s.transmit;
+      } else {
+        ws.kind = 'sphere';
+        ws.c = s.c.clone().applyMatrix4(M);
+        ws.R = s.R;
+        ws.axis = s.axis.clone().applyMatrix3(NM).normalize();
+        ws.aperture = s.aperture;
+        if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
+      }
+      out.push(ws);
+    }
+  }
+  return out;
+}
+
+function intersectSurf(s, o, d){
+  if (s.kind === 'rect'){
+    const den = s.n.dot(d);
+    if (Math.abs(den) < 1e-10) return null;
+    const t = s.o.clone().sub(o).dot(s.n) / den;
+    if (t < 1e-5) return null;
+    const p = o.clone().addScaledVector(d, t);
+    const rel = p.clone().sub(s.o);
+    if (Math.abs(rel.dot(s.e1)) > s.h1) return null;
+    if (Math.abs(rel.dot(s.e2)) > s.h2) return null;
+    return t;
+  } else {
+    const oc = o.clone().sub(s.c);
+    const b = oc.dot(d);
+    const c = oc.dot(oc) - s.R*s.R;
+    const disc = b*b - c;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    for (const t of [-b - sq, -b + sq]){
+      if (t < 1e-5) continue;
+      const p = o.clone().addScaledVector(d, t);
+      const v = p.clone().sub(s.c);
+      const proj = v.dot(s.axis);
+      if (proj <= 0) continue;
+      const rad = v.clone().addScaledVector(s.axis, -proj).length();
+      if (rad > s.aperture) continue;
+      return t;
+    }
+    return null;
+  }
+}
+
+function nearestHit(o, d, surfaces){
+  let bestT = Infinity, bestS = null;
+  for (const s of surfaces){
+    const t = intersectSurf(s, o, d);
+    if (t !== null && t < bestT){ bestT = t; bestS = s; }
+  }
+  if (!bestS) return null;
+  const p = o.clone().addScaledVector(d, bestT);
+  const n = (bestS.kind === 'rect') ? bestS.n.clone() : p.clone().sub(bestS.c).normalize();
+  return { surf:bestS, t:bestT, p, n };
+}
+
+/* ============================================================
+   6.  RAY TRACING
+   ============================================================ */
+const MAX_DEPTH   = 22;
+const MAX_SEGS    = 45000;
+const MIN_INT     = 0.0025;
+
+let segPositions, segColors, segGeo, segLines, segCount = 0;
+
+(function initSegBuffers(){
+  segPositions = new Float32Array(MAX_SEGS * 6);
+  segColors    = new Float32Array(MAX_SEGS * 6);
+  segGeo = new THREE.BufferGeometry();
+  segGeo.setAttribute('position', new THREE.BufferAttribute(segPositions, 3));
+  segGeo.setAttribute('color',    new THREE.BufferAttribute(segColors, 3));
+  segGeo.setDrawRange(0, 0);
+  const mat = new THREE.LineBasicMaterial({
+    vertexColors:true, transparent:true, opacity:0.95,
+    blending:THREE.AdditiveBlending, depthWrite:false
+  });
+  segLines = new THREE.LineSegments(segGeo, mat);
+  segLines.frustumCulled = false;
+  scene.add(segLines);
+})();
+
+let ambientMedium = MEDIA.air;
+
+function pushSegment(a, b, wl, J){
+  if (segCount >= MAX_SEGS) return;
+  const I = clamp(J_intensity(J), 0, 1);
+  const bright = Math.pow(I, 0.8);
+  const col = wavelengthToRGB(wl);
+  const r = col[0]*bright, g = col[1]*bright, bl = col[2]*bright;
+  const i6 = segCount*6;
+  segPositions[i6  ] = a.x; segPositions[i6+1] = a.y; segPositions[i6+2] = a.z;
+  segPositions[i6+3] = b.x; segPositions[i6+4] = b.y; segPositions[i6+5] = b.z;
+  segColors[i6  ] = r; segColors[i6+1] = g; segColors[i6+2] = bl;
+  segColors[i6+3] = r; segColors[i6+4] = g; segColors[i6+5] = bl;
+  segCount++;
+}
+
+function stepRay(ray, surfaces, queue){
+  if (ray.depth > MAX_DEPTH) return;
+
+  const hit = nearestHit(ray.o, ray.d, surfaces);
+  const end = hit ? hit.p : ray.o.clone().addScaledVector(ray.d, 400);
+  pushSegment(ray.o, end, ray.wl, ray.J);
+  if (!hit) return;
+
+  const surf = hit.surf;
+  const d = ray.d;
+  let n = hit.n.clone();
+  let cosi = -d.dot(n);
+  if (cosi < 0){ n.negate(); cosi = -cosi; }
+  cosi = clamp(cosi, 0, 1);
+
+  // --- local s-basis (perpendicular to plane of incidence) ---
+  let sNew = V().crossVectors(d, n);
+  if (sNew.lengthSq() < 1e-14) sNew = arbitraryPerp(d);
+  sNew.normalize();
+
+  // --- transport polarization basis ---
+  let J = ray.J;
+  if (ray.s){
+    const pOld = V().crossVectors(ray.s, d);
+    const alpha = sNew.dot(ray.s);
+    const beta  = sNew.dot(pOld);
+    const phi = Math.atan2(beta, alpha);
+    if (Math.abs(phi) > 1e-9) J = J_rotate(J, phi);
+  }
+  if (J_intensity(J) < MIN_INT) return;
+
+  const p   = hit.p;
+  const eps = 4e-4;
+  const depth = ray.depth + 1;
+  const wl = ray.wl;
+
+  const reflectDir = d.clone().addScaledVector(n, -2*d.dot(n)).normalize();
+
+  switch (surf.behavior){
+
+    /* ---------- MIRROR ---------- */
+    case 'mirror': {
+      const k = Math.sqrt(surf.reflectivity ?? 0.95);
+      queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
+                   J:J_scale(J,k,k), wl, inside:ray.inside, depth });
+      break;
+    }
+
+    /* ---------- BEAM SPLITTER ---------- */
+    case 'split': {
+      const R = surf.reflectivity ?? 0.5;
+      if (R > 0.001){
+        const k = Math.sqrt(R);
+        queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
+                     J:J_scale(J,k,k), wl, inside:ray.inside, depth });
+      }
+      if (R < 0.999){
+        const k = Math.sqrt(1-R);
+        queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
+                     J:J_scale(J,k,k), wl, inside:ray.inside, depth });
+      }
+      break;
+    }
+
+    /* ---------- POLARIZER ---------- */
+    case 'polarizer': {
+      const axis = surf.axisWorld.clone();
+      axis.addScaledVector(d, -axis.dot(d));
+      if (axis.lengthSq() < 1e-12) break;
+      axis.normalize();
+      const pv = V().crossVectors(sNew, d).normalize();
+      const th = Math.atan2(axis.dot(pv), axis.dot(sNew));
+      const c = Math.cos(th), s = Math.sin(th);
+      // P = |θ><θ|
+      const U = [[[c*c,0],[c*s,0]],[[c*s,0],[s*s,0]]];
+      const J2 = J_apply(J, U);
+      if (J_intensity(J2) < MIN_INT) break;
+      queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
+                   J:J2, wl, inside:ray.inside, depth });
+      break;
+    }
+
+    /* ---------- WAVE PLATE ---------- */
+    case 'waveplate': {
+      const axis = surf.axisWorld.clone();
+      axis.addScaledVector(d, -axis.dot(d));
+      if (axis.lengthSq() < 1e-12) break;
+      axis.normalize();
+      const pv = V().crossVectors(sNew, d).normalize();
+      const th = Math.atan2(axis.dot(pv), axis.dot(sNew));
+      const c = Math.cos(th), s = Math.sin(th);
+      const delta = surf.retardance;
+      const cd = Math.cos(delta), sd = Math.sin(delta);
+      // U = R(θ)·diag(1, e^{iδ})·R(-θ)
+      const U = [
+        [ [c*c + s*s*cd,      s*s*sd ], [ c*s*(1-cd),  -c*s*sd ] ],
+        [ [c*s*(1-cd),       -c*s*sd ], [ s*s + c*c*cd, c*c*sd ] ]
+      ];
+      const J2 = J_apply(J, U);
+      if (J_intensity(J2) < MIN_INT) break;
+      queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
+                   J:J2, wl, inside:ray.inside, depth });
+      break;
+    }
+
+    /* ---------- COLOR FILTER ---------- */
+    case 'filter': {
+      const T = surf.transmit(wl);
+      if (T <= 0.002) break;
+      const k = Math.sqrt(T);
+      queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
+                   J:J_scale(J,k,k), wl, inside:ray.inside, depth });
+      break;
+    }
+
+    /* ---------- DIELECTRIC (refraction + Fresnel) ---------- */
+    case 'dielectric': {
+      const n1 = ray.inside ? nOf(ray.inside.material, wl) : nOf(ambientMedium, wl);
+      const n2 = (ray.inside === surf.comp) ? nOf(ambientMedium, wl) : nOf(surf.comp.material, wl);
+      const eta = n1 / n2;
+      const sin2t = eta*eta*(1 - cosi*cosi);
+
+      if (sin2t >= 1.0){
+        // total internal reflection — full reflection
+        queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
+                     J:J, wl, inside:ray.inside, depth });
+        break;
+      }
+
+      const cost = Math.sqrt(1 - sin2t);
+      const rs  = (n1*cosi - n2*cost) / (n1*cosi + n2*cost);
+      const rp  = (n2*cosi - n1*cost) / (n2*cosi + n1*cost);
+      const ts0 = 2*n1*cosi / (n1*cosi + n2*cost);
+      const tp0 = 2*n1*cosi / (n2*cosi + n1*cost);
+
+      // convert to power coefficients (energy conservation across the interface)
+      const fac = Math.sqrt(Math.max(0, (n2*cost) / (n1*cosi)));
+      const ts = ts0*fac, tp = tp0*fac;
+
+      const Jr = J_scale(J, rs, rp);
+      const Jt = J_scale(J, ts, tp);
+      const I0 = J_intensity(J);
+
+      if (J_intensity(Jr) > MIN_INT && J_intensity(Jr) > 0.004*I0){
+        queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
+                     J:Jr, wl, inside:ray.inside, depth });
+      }
+      if (J_intensity(Jt) > MIN_INT){
+        const dt = d.clone().multiplyScalar(eta).addScaledVector(n, eta*cosi - cost).normalize();
+        const newInside = (ray.inside === surf.comp) ? null : surf.comp;
+        queue.push({ o:p.clone().addScaledVector(dt, eps), d:dt, s:sNew,
+                     J:Jt, wl, inside:newInside, depth });
+      }
+      break;
+    }
+  }
+}
+
+/* ---------- generate initial rays ---------- */
+function makeInitialRays(){
+  const rays = [];
+  const M = sourceGroup.matrixWorld;
+  const origin = new THREE.Vector3().setFromMatrixPosition(M);
+  const q = sourceGroup.quaternion;
+  const dir   = V(0,0,1).applyQuaternion(q).normalize();
+  const right = V(1,0,0).applyQuaternion(q).normalize();
+  const up    = V(0,1,0).applyQuaternion(q).normalize();
+
+  const N = sourceState.rays;
+  const isWhite = sourceState.type === 'white';
+  const wls = [];
+  if (isWhite){
+    const K = 9;
+    for (let i=0;i<K;i++) wls.push(400 + (680-400)*i/(K-1));
+  } else {
+    wls.push(parseFloat(sourceState.type));
+  }
+
+  const spreadRad = sourceState.spread * Math.PI/180;
+
+  for (let i=0;i<N;i++){
+    const rr = sourceState.radius * Math.sqrt((i+0.5)/N);
+    const th = i * 2.39996323;
+    const off = right.clone().multiplyScalar(rr*Math.cos(th))
+                 .add(up.clone().multiplyScalar(rr*Math.sin(th)));
+
+    for (const wl of wls){
+      let start, d0;
+      if (spreadRad > 0.0001){
+        // point source — diverging cone
+        const t = Math.sqrt((i+0.5)/N);
+        const a = i * 2.39996323;
+        start = origin.clone();
+        d0 = dir.clone()
+              .addScaledVector(right, Math.tan(spreadRad)*t*Math.cos(a))
+              .addScaledVector(up,    Math.tan(spreadRad)*t*Math.sin(a))
+              .normalize();
+      } else {
+        start = origin.clone().add(off);
+        d0 = dir.clone();
+      }
+
+      // initial polarization state in a basis tied to the beam
+      const s0 = arbitraryPerp(d0);
+      const p0 = V().crossVectors(s0, d0).normalize();
+      let J;
+      if (sourceState.pol === 'lin'){
+        // linear polarization along `up` (vertical)
+        const ex = up.dot(s0), ey = up.dot(p0);
+        J = J_linear(1, ex, ey);
+      } else {
+        J = J_unpolarized(1);
+      }
+
+      rays.push({ o:start, d:d0, s:s0, J, wl, inside:null, depth:0 });
+    }
+  }
+  return rays;
+}
+
+/* ---------- main trace ---------- */
+function doTrace(){
+  segCount = 0;
+  const surfaces = collectSurfaces();
+  const queue = makeInitialRays();
+
+  let processed = 0;
+  const MAX_PROC = 60000;
+
+  while (queue.length > 0 && processed < MAX_PROC && segCount < MAX_SEGS){
+    const ray = queue.pop();
+    processed++;
+    stepRay(ray, surfaces, queue);
+  }
+
+  segGeo.attributes.position.needsUpdate = true;
+  segGeo.attributes.color.needsUpdate = true;
+  segGeo.setDrawRange(0, segCount*2);
+  document.getElementById('hudSegs').textContent = segCount.toLocaleString();
+}
+
+let traceScheduled = false;
+function scheduleTrace(){
+  if (traceScheduled) return;
+  traceScheduled = true;
+  requestAnimationFrame(()=>{ traceScheduled = false; doTrace(); });
+}
+
+/* ============================================================
+   7.  UI
+   ============================================================ */
+const inspector = document.getElementById('inspector');
+
+function el(tag, cls, txt){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt !== undefined) e.textContent = txt;
+  return e;
+}
+
+function makeSliderRow(label, min, max, step, value, unit, onInput){
+  const row = el('div','row');
+  row.appendChild(el('label', null, label));
+  const inp = document.createElement('input');
+  inp.type='range'; inp.min=min; inp.max=max; inp.step=step; inp.value=value;
+  const val = el('span','val', (unit==='°'? value+'°' : (+value).toFixed(step<1?2:0)));
+  inp.addEventListener('input', ()=>{
+    const v = parseFloat(inp.value);
+    val.textContent = (unit==='°'? v+'°' : (step<1? v.toFixed(2): v));
+    onInput(v);
+  });
+  row.appendChild(inp); row.appendChild(val);
+  return row;
+}
+
+function makeSelectRow(label, options, value, onChange){
+  const row = el('div','row');
+  row.appendChild(el('label', null, label));
+  const sel = document.createElement('select');
+  for (const [v,l] of options){
+    const o = document.createElement('option');
+    o.value = v; o.textContent = l; if (v===value) o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', ()=> onChange(sel.value));
+  row.appendChild(sel);
+  return row;
+}
+
+function refreshInspector(){
+  inspector.innerHTML = '';
+  if (!selected){
+    inspector.innerHTML = '<div class="hint">Click an object in the scene to edit it. Drag to move. Shift+drag to raise/lower. Delete key removes it.</div>';
+    return;
+  }
+
+  const c = selected;
+  const tag = el('div','pill', c.label || 'Object');
+  inspector.appendChild(tag);
+
+  // ---- type-specific parameters ----
+  if (c.defs && c.defs.length){
+    for (const d of c.defs){
+      const cur = c.params[d.key];
+      if (d.type === 'range'){
+        inspector.appendChild(makeSliderRow(d.label, d.min, d.max, d.step, cur, d.unit, v=>{
+          c.params[d.key] = v;
+          rebuild(c);
+        }));
+      } else if (d.type === 'select'){
+        inspector.appendChild(makeSelectRow(d.label, d.options, cur, v=>{
+          c.params[d.key] = v; rebuild(c);
+        }));
+      } else if (d.type === 'material'){
+        const opts = Object.keys(MEDIA).map(k=>[k, MEDIA[k].label]);
+        inspector.appendChild(makeSelectRow(d.label, opts, cur, v=>{
+          c.params[d.key] = v; c.material = MEDIA[v]; rebuild(c);
+        }));
+      }
+    }
+  }
+
+  inspector.appendChild(el('hr'));
+
+  // ---- transform ----
+  const g = c.group;
+  inspector.appendChild(makeSliderRow('X', -10, 10, 0.1, g.position.x, '', v=>{
+    g.position.x = v; scheduleTrace();
+  }));
+  inspector.appendChild(makeSliderRow('Y', 0.2, 8, 0.1, g.position.y, '', v=>{
+    g.position.y = v; scheduleTrace();
+  }));
+  inspector.appendChild(makeSliderRow('Z', -10, 10, 0.1, g.position.z, '', v=>{
+    g.position.z = v; scheduleTrace();
+  }));
+  inspector.appendChild(makeSliderRow('Yaw', -180, 180, 1, THREE.MathUtils.radToDeg(g.rotation.y), '°', v=>{
+    g.rotation.y = THREE.MathUtils.degToRad(v); scheduleTrace();
+  }));
+  inspector.appendChild(makeSliderRow('Pitch', -90, 90, 1, THREE.MathUtils.radToDeg(g.rotation.x), '°', v=>{
+    g.rotation.x = THREE.MathUtils.degToRad(v); scheduleTrace();
+  }));
+
+  if (c !== sourceState){
+    inspector.appendChild(el('hr'));
+    const del = el('button','danger','Delete component');
+    del.style.width = '100%';
+    del.addEventListener('click', ()=>{
+      scene.remove(g);
+      const i = components.indexOf(c);
+      if (i >= 0) components.splice(i,1);
+      selected = null;
+      refreshInspector();
+      scheduleTrace();
+    });
+    inspector.appendChild(del);
+  }
+}
+
+function select(obj){
+  selected = obj;
+  refreshInspector();
+}
+
+/* ---- Add buttons ---- */
+document.querySelectorAll('[data-add]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const type = btn.dataset.add;
+    const t = COMPONENT_TYPES[type];
+    // place near the origin, slightly offset each time
+    const off = (components.length % 5) * 0.4 - 0.8;
+    const comp = addComponent(type, V(off, 2, 0), 0);
+    select(comp);
+    scheduleTrace();
+  });
+});
+
+/* ---- Source controls ---- */
+const $ = id => document.getElementById(id);
+
+$('srcType').addEventListener('change', e=>{ sourceState.type = e.target.value; scheduleTrace(); });
+$('srcPol').addEventListener('change',  e=>{ sourceState.pol  = e.target.value; scheduleTrace(); });
+$('srcRadius').addEventListener('input', e=>{
+  sourceState.radius = parseFloat(e.target.value);
+  $('vRadius').textContent = sourceState.radius.toFixed(2);
+  scheduleTrace();
+});
+$('srcRays').addEventListener('input', e=>{
+  sourceState.rays = parseInt(e.target.value);
+  $('vRays').textContent = sourceState.rays;
+  scheduleTrace();
+});
+$('srcSpread').addEventListener('input', e=>{
+  sourceState.spread = parseFloat(e.target.value);
+  $('vSpread').textContent = sourceState.spread + '°';
+  scheduleTrace();
+});
+
+/* ---- Ambient medium select ---- */
+(function(){
+  const sel = $('ambient');
+  for (const k of Object.keys(MEDIA)){
+    const o = document.createElement('option');
+    o.value = k; o.textContent = MEDIA[k].label;
+    if (k === 'air') o.selected = true;
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', ()=>{
+    ambientMedium = MEDIA[sel.value];
+    scheduleTrace();
+  });
+})();
+
+/* ============================================================
+   8.  INTERACTION  (select / drag)
+   ============================================================ */
+const raycaster = new THREE.Raycaster();
+const pointer   = new THREE.Vector2();
+const dragPlane = new THREE.Plane();
+const dragPt    = new THREE.Vector3();
+
+let dragState = null;
+
+function pointerRay(e){
+  const r = renderer.domElement.getBoundingClientRect();
+  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  return raycaster.ray;
+}
+
+function pickRoots(){
+  const arr = components.map(c=>c.group);
+  arr.push(sourceGroup);
+  return arr;
+}
+
+renderer.domElement.addEventListener('pointerdown', e=>{
+  if (e.button !== 0) return;
+
+  const ray = pointerRay(e);
+  const hits = raycaster.intersectObjects(pickRoots(), true);
+
+  if (hits.length){
+    let o = hits[0].object;
+    while (o && !o.userData.comp) o = o.parent;
+    if (o){
+      select(o.userData.comp);
+      const g = o;
+      // horizontal drag plane through object
+      dragPlane.setFromNormalAndCoplanarPoint(V(0,1,0), g.position);
+      if (ray.intersectPlane(dragPlane, dragPt)){
+        dragState = {
+          group: g,
+          offset: g.position.clone().sub(dragPt),
+          startY: g.position.y,
+          startClientY: e.clientY
+        };
+        controls.enabled = false;
+      }
+      return;
+    }
+  }
+  select(null);
+});
+
+renderer.domElement.addEventListener('pointermove', e=>{
+  if (!dragState) return;
+  const g = dragState.group;
+
+  if (e.shiftKey){
+    // vertical drag
+    const dy = e.clientY - dragState.startClientY;
+    g.position.y = clamp(dragState.startY - dy * 0.012, 0.1, 9);
+  } else {
+    dragPlane.setFromNormalAndCoplanarPoint(V(0,1,0), g.position);
+    const ray = pointerRay(e);
+    if (ray.intersectPlane(dragPlane, dragPt)){
+      g.position.copy(dragPt.add(dragState.offset));
+    }
+  }
+  refreshInspectorValues();
+  scheduleTrace();
+});
+
+function refreshInspectorValues(){
+  // cheap: rebuild the inspector only when dragging stops to avoid DOM churn
+}
+
+window.addEventListener('pointerup', ()=>{
+  if (dragState){
+    dragState = null;
+    controls.enabled = true;
+    refreshInspector();
+  }
+});
+
+window.addEventListener('keydown', e=>{
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selected && selected !== sourceState){
+    scene.remove(selected.group);
+    const i = components.indexOf(selected);
+    if (i >= 0) components.splice(i,1);
+    selected = null;
+    refreshInspector();
+    scheduleTrace();
+  }
+});
+
+/* ============================================================
+   9.  BOOT + LOOP
+   ============================================================ */
+// initial demo layout
+addComponent('lens',  V(0, 2, -0.5), 0);
+addComponent('mirror', V(0, 2, 3.2), -Math.PI/4);
+
+refreshInspector();
+scheduleTrace();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
