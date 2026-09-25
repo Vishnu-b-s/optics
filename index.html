@@ -1,1879 +1,2250 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>3D Optics Lab — Ray Tracing Sandbox</title>
-<style>
-  :root{
-    --bg:#0a0718; --panel:rgba(16,14,32,.92); --line:#221e40; --txt:#cfd6ee;
-    --dim:#8078a8; --acc:#6cd8ff; --acc2:#ff7ad9;
-  }
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;color:var(--txt);
-    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    overflow:hidden;-webkit-font-smoothing:antialiased;
-    background: radial-gradient(ellipse at 50% 12%, #2a1f4d 0%, #150e2e 42%, #06040f 100%);
-  }
-  canvas#c{display:block;background:transparent}
-  #panel{
-    position:fixed;top:10px;left:10px;width:296px;max-height:calc(100% - 20px);
-    overflow-y:auto;background:var(--panel);backdrop-filter:blur(12px);
-    border:1px solid var(--line);border-radius:14px;padding:12px;z-index:10;
-    box-shadow:0 18px 50px rgba(0,0,0,.6);
-  }
-  #panel::-webkit-scrollbar{width:8px}
-  #panel::-webkit-scrollbar-thumb{background:#2b2450;border-radius:4px}
-  h1{font-size:14px;margin:0 0 10px;letter-spacing:.5px;color:#fff;font-weight:600}
-  h1 span{color:var(--acc)}
-  h2{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);
-     margin:14px 0 7px;font-weight:600}
-  h2:first-of-type{margin-top:4px}
-  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0}
-  .row label{color:var(--dim);font-size:12px;flex:1}
-  input[type=range]{-webkit-appearance:none;appearance:none;height:3px;background:#2a2350;
-    border-radius:2px;flex:1.2;outline:none}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
-    border-radius:50%;background:var(--acc);cursor:pointer;box-shadow:0 0 8px rgba(108,216,255,.7)}
-  input[type=range]::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;
-    background:var(--acc);cursor:pointer}
-  select{background:#181330;color:var(--txt);border:1px solid var(--line);border-radius:7px;
-    padding:4px 6px;font-size:12px;flex:1.2;outline:none}
-  .val{font-variant-numeric:tabular-nums;color:var(--acc);font-size:11px;min-width:52px;text-align:right}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-  button{background:#1a1538;color:var(--txt);border:1px solid var(--line);border-radius:8px;
-    padding:7px 6px;font-size:11.5px;cursor:pointer;transition:.15s;font-family:inherit}
-  button:hover{background:#241d4a;border-color:#3a2f70;color:#fff}
-  button.danger{background:#2a1520;border-color:#4a2030;color:#ff9db0}
-  button.danger:hover{background:#3a1b2b}
-  .hint{color:var(--dim);font-size:11.5px;font-style:italic;padding:4px 0}
-  .pill{display:inline-block;padding:2px 7px;border-radius:20px;background:#1c1638;
-    border:1px solid var(--line);font-size:10.5px;color:var(--acc);margin-bottom:6px}
-  .readout{background:#0e0a22;border:1px solid #221e40;border-radius:8px;padding:8px 10px;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;
-    color:#8ef0ff;line-height:1.75;margin-top:6px;letter-spacing:.2px}
-  .readout .k{color:#5b7aa6}
-  .readout .v{color:#7df0ff}
-  #hud{position:fixed;bottom:10px;right:12px;font-size:11px;color:var(--dim);z-index:10;
-    text-align:right;line-height:1.6;pointer-events:none}
-  #hud b{color:var(--acc);font-weight:500}
-  hr{border:0;border-top:1px solid var(--line);margin:11px 0}
-  .note{font-size:10.5px;color:#5b7aa6;line-height:1.35;margin:2px 0 6px;
-    font-style:italic;padding-left:2px}
-  .bulb-hint{background:#1c1030;border:1px solid #3a2070;color:#d4b8ff;
-    font-size:10.5px;border-radius:7px;padding:6px 8px;margin-top:6px;line-height:1.45}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OptoLabs — 3D Ray Tracing Sandbox</title>
+  <style>
+    :root {
+      --bg: #0a0718;
+      --panel: rgba(16, 14, 32, .92);
+      --line: #221e40;
+      --txt: #cfd6ee;
+      --dim: #8078a8;
+      --acc: #6cd8ff;
+      --acc2: #ff7ad9;
+    }
 
-  /* ============ MONITORS (side popups) ============ */
-  #monitors{
-    position:fixed;top:10px;right:10px;width:252px;
-    max-height:calc(100% - 60px);overflow-y:auto;overflow-x:hidden;
-    z-index:10;display:flex;flex-direction:column;gap:10px;padding-right:2px;
-  }
-  #monitors::-webkit-scrollbar{width:8px}
-  #monitors::-webkit-scrollbar-thumb{background:#2b2450;border-radius:4px}
-  .monitor{
-    background:var(--panel);backdrop-filter:blur(12px);
-    border:1px solid var(--line);border-radius:14px;padding:10px;
-    box-shadow:0 18px 50px rgba(0,0,0,.65);
-    animation:monitorIn .28s cubic-bezier(.2,.9,.3,1.2);
-  }
-  @keyframes monitorIn{
-    from{opacity:0;transform:translateX(26px) scale(.96)}
-    to  {opacity:1;transform:translateX(0) scale(1)}
-  }
-  .monitor-header{display:flex;align-items:center;gap:7px;margin-bottom:7px}
-  .monitor-dot{width:7px;height:7px;border-radius:50%;background:var(--acc);
-    box-shadow:0 0 9px var(--acc);flex-shrink:0;animation:pulse 1.8s infinite ease-in-out}
-  .detector-monitor .monitor-dot{background:#33ff88;box-shadow:0 0 9px #33ff88}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
-  .monitor-title{font-size:10.5px;letter-spacing:1.3px;color:#9aa8cc;flex:1;font-weight:600}
-  .monitor-close{background:transparent;border:0;color:#5b7aa6;font-size:17px;line-height:1;
-    cursor:pointer;padding:0 5px 2px;border-radius:5px;font-family:inherit;transition:.15s}
-  .monitor-close:hover{background:#241d4a;color:#fff}
-  .monitor-canvas{width:100%;height:auto;display:block;border-radius:9px;
-    background:#050810;border:1px solid #221e40;
-    box-shadow:0 0 0 1px rgba(108,216,255,.06), 0 4px 14px rgba(0,0,0,.5) inset}
-  .monitor-readout{margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:10.5px}
-  .monitor-readout > div{display:flex;justify-content:space-between;color:#5b7aa6}
-  .monitor-readout b{color:#7df0ff;font-weight:500}
-</style>
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      color: var(--txt);
+      font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+      background: radial-gradient(ellipse at 50% 12%, #2a1f4d 0%, #150e2e 42%, #06040f 100%);
+    }
+
+    canvas#c {
+      display: block;
+      background: transparent
+    }
+
+    #panel {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      width: 296px;
+      max-height: calc(100% - 20px);
+      overflow-y: auto;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      z-index: 10;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .6);
+    }
+
+    #panel::-webkit-scrollbar {
+      width: 8px
+    }
+
+    #panel::-webkit-scrollbar-thumb {
+      background: #2b2450;
+      border-radius: 4px
+    }
+
+    h1 {
+      font-size: 14px;
+      margin: 0 0 10px;
+      letter-spacing: .5px;
+      color: #fff;
+      font-weight: 600
+    }
+
+    h1 span {
+      color: var(--acc)
+    }
+
+    h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.1px;
+      color: var(--dim);
+      margin: 14px 0 7px;
+      font-weight: 600
+    }
+
+    h2:first-of-type {
+      margin-top: 4px
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 5px 0
+    }
+
+    .row label {
+      color: var(--dim);
+      font-size: 12px;
+      flex: 1
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: #2a2350;
+      border-radius: 2px;
+      flex: 1.2;
+      outline: none
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--acc);
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(108, 216, 255, .7)
+    }
+
+    input[type=range]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--acc);
+      cursor: pointer
+    }
+
+    select {
+      background: #181330;
+      color: var(--txt);
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 4px 6px;
+      font-size: 12px;
+      flex: 1.2;
+      outline: none
+    }
+
+    .val {
+      font-variant-numeric: tabular-nums;
+      color: var(--acc);
+      font-size: 11px;
+      min-width: 52px;
+      text-align: right
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px
+    }
+
+    button {
+      background: #1a1538;
+      color: var(--txt);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 6px;
+      font-size: 11.5px;
+      cursor: pointer;
+      transition: .15s;
+      font-family: inherit
+    }
+
+    button:hover {
+      background: #241d4a;
+      border-color: #3a2f70;
+      color: #fff
+    }
+
+    button.danger {
+      background: #2a1520;
+      border-color: #4a2030;
+      color: #ff9db0
+    }
+
+    button.danger:hover {
+      background: #3a1b2b
+    }
+
+    .hint {
+      color: var(--dim);
+      font-size: 11.5px;
+      font-style: italic;
+      padding: 4px 0
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 20px;
+      background: #1c1638;
+      border: 1px solid var(--line);
+      font-size: 10.5px;
+      color: var(--acc);
+      margin-bottom: 6px
+    }
+
+    .readout {
+      background: #0e0a22;
+      border: 1px solid #221e40;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      color: #8ef0ff;
+      line-height: 1.75;
+      margin-top: 6px;
+      letter-spacing: .2px
+    }
+
+    .readout .k {
+      color: #5b7aa6
+    }
+
+    .readout .v {
+      color: #7df0ff
+    }
+
+    #hud {
+      position: fixed;
+      bottom: 10px;
+      right: 12px;
+      font-size: 11px;
+      color: var(--dim);
+      z-index: 10;
+      text-align: right;
+      line-height: 1.6;
+      pointer-events: none
+    }
+
+    #hud b {
+      color: var(--acc);
+      font-weight: 500
+    }
+
+    hr {
+      border: 0;
+      border-top: 1px solid var(--line);
+      margin: 11px 0
+    }
+
+    .note {
+      font-size: 10.5px;
+      color: #5b7aa6;
+      line-height: 1.35;
+      margin: 2px 0 6px;
+      font-style: italic;
+      padding-left: 2px
+    }
+
+    .bulb-hint {
+      background: #1c1030;
+      border: 1px solid #3a2070;
+      color: #d4b8ff;
+      font-size: 10.5px;
+      border-radius: 7px;
+      padding: 6px 8px;
+      margin-top: 6px;
+      line-height: 1.45
+    }
+
+    /* ============ MONITORS (side popups) ============ */
+    #monitors {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      width: 252px;
+      max-height: calc(100% - 60px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-right: 2px;
+    }
+
+    #monitors::-webkit-scrollbar {
+      width: 8px
+    }
+
+    #monitors::-webkit-scrollbar-thumb {
+      background: #2b2450;
+      border-radius: 4px
+    }
+
+    .monitor {
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow: 0 18px 50px rgba(0, 0, 0, .65);
+      animation: monitorIn .28s cubic-bezier(.2, .9, .3, 1.2);
+    }
+
+    @keyframes monitorIn {
+      from {
+        opacity: 0;
+        transform: translateX(26px) scale(.96)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0) scale(1)
+      }
+    }
+
+    .monitor-header {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 7px
+    }
+
+    .monitor-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--acc);
+      box-shadow: 0 0 9px var(--acc);
+      flex-shrink: 0;
+      animation: pulse 1.8s infinite ease-in-out
+    }
+
+    .detector-monitor .monitor-dot {
+      background: #33ff88;
+      box-shadow: 0 0 9px #33ff88
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .45
+      }
+    }
+
+    .monitor-title {
+      font-size: 10.5px;
+      letter-spacing: 1.3px;
+      color: #9aa8cc;
+      flex: 1;
+      font-weight: 600
+    }
+
+    .monitor-close {
+      background: transparent;
+      border: 0;
+      color: #5b7aa6;
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 5px 2px;
+      border-radius: 5px;
+      font-family: inherit;
+      transition: .15s
+    }
+
+    .monitor-close:hover {
+      background: #241d4a;
+      color: #fff
+    }
+
+    .monitor-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 9px;
+      background: #050810;
+      border: 1px solid #221e40;
+      box-shadow: 0 0 0 1px rgba(108, 216, 255, .06), 0 4px 14px rgba(0, 0, 0, .5) inset
+    }
+
+    .monitor-readout {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 10.5px
+    }
+
+    .monitor-readout>div {
+      display: flex;
+      justify-content: space-between;
+      color: #5b7aa6
+    }
+
+    .monitor-readout b {
+      color: #7df0ff;
+      font-weight: 500
+    }
+  </style>
 </head>
+
 <body>
-<canvas id="c"></canvas>
+  <canvas id="c"></canvas>
 
-<div id="panel">
-  <h1>3D <span>Optics</span> Lab</h1>
+  <div id="panel">
+    <h1>3D <span>Optics</span> Lab</h1>
 
-  <h2>Light Source</h2>
-  <div class="row"><label>Representation</label>
-    <select id="lightModel">
-      <option value="ray">Ray (geometric)</option>
-      <option value="beam" selected>Beam (collimated)</option>
-      <option value="wave">Wave (E-field)</option>
-      <option value="plane">Plane wave</option>
-      <option value="spherical">Spherical wave</option>
-      <option value="gaussian">Gaussian beam</option>
-      <option value="torch">🔦 Real-world torch (volumetric)</option>
-    </select></div>
-  <div class="note" id="modelNote">Parallel rays — width controlled by beam radius &amp; ray count.</div>
+    <h2>Light Source</h2>
+    <div class="row"><label>Representation</label>
+      <select id="lightModel">
+        <option value="ray">Ray (geometric)</option>
+        <option value="beam" selected>Beam (collimated)</option>
+        <option value="wave">Wave (E-field)</option>
+        <option value="plane">Plane wave</option>
+        <option value="spherical">Spherical wave</option>
+        <option value="gaussian">Gaussian beam</option>
+        <option value="torch">🔦 Real-world torch (volumetric)</option>
+      </select>
+    </div>
+    <div class="note" id="modelNote">Parallel rays — width controlled by beam radius &amp; ray count.</div>
 
-  <div class="row"><label>Type</label>
-    <select id="srcType">
-      <option value="white">White light (broadband)</option>
-      <option value="650">Red laser · 650 nm</option>
-      <option value="532">Green laser · 532 nm</option>
-      <option value="473">Blue laser · 473 nm</option>
-      <option value="405">Violet laser · 405 nm</option>
-    </select></div>
-  <div class="row"><label>Polarization</label>
-    <select id="srcPol">
-      <option value="unpol">Unpolarized</option>
-      <option value="lin">Linear</option>
-    </select></div>
-  <div class="row"><label>Brightness</label><input type="range" id="srcIntensity" min="0.05" max="5" step="0.05" value="1"><span class="val" id="vIntensity">1.0×</span></div>
-  <div class="row"><label>Beam radius</label><input type="range" id="srcRadius" min="0" max="1.2" step="0.02" value="0.35"><span class="val" id="vRadius">0.35</span></div>
-  <div class="row"><label>Ray count</label><input type="range" id="srcRays" min="0" max="800" step="1" value="70"><span class="val" id="vRays">5</span></div>
-  <div class="row"><label>Beam angle</label><input type="range" id="srcSpread" min="0" max="40" step="1" value="0"><span class="val" id="vSpread">0°</span></div>
-  <div class="note" id="rayNote">Log scale: 1 ray → 100,000,000 rays</div>
+    <div class="row"><label>Type</label>
+      <select id="srcType">
+        <option value="white">White light (broadband)</option>
+        <option value="650">Red laser · 650 nm</option>
+        <option value="532">Green laser · 532 nm</option>
+        <option value="473">Blue laser · 473 nm</option>
+        <option value="405">Violet laser · 405 nm</option>
+      </select>
+    </div>
+    <div class="row"><label>Polarization</label>
+      <select id="srcPol">
+        <option value="unpol">Unpolarized</option>
+        <option value="lin">Linear</option>
+      </select>
+    </div>
+    <div class="row"><label>Brightness</label><input type="range" id="srcIntensity" min="0.05" max="5" step="0.05"
+        value="1"><span class="val" id="vIntensity">1.0×</span></div>
+    <div class="row"><label>Beam radius</label><input type="range" id="srcRadius" min="0" max="1.2" step="0.02"
+        value="0.35"><span class="val" id="vRadius">0.35</span></div>
+    <div class="row"><label>Ray count</label><input type="range" id="srcRays" min="0" max="800" step="1"
+        value="70"><span class="val" id="vRays">5</span></div>
+    <div class="row"><label>Beam angle</label><input type="range" id="srcSpread" min="0" max="40" step="1"
+        value="0"><span class="val" id="vSpread">0°</span></div>
+    <div class="note" id="rayNote">Log scale: 1 ray → 100,000,000 rays</div>
 
-  <h2>Add Component</h2>
-  <div class="grid">
-    <button data-add="mirror">Mirror</button>
-    <button data-add="curvedmirror">Concave mirror</button>
-    <button data-add="beamsplitter">Beam splitter</button>
-    <button data-add="polarizer">Polarizer</button>
-    <button data-add="halfwave">½-wave plate</button>
-    <button data-add="quarterwave">¼-wave plate</button>
-    <button data-add="lens">Lens</button>
-    <button data-add="prism">Prism</button>
-    <button data-add="block">Glass block</button>
-    <button data-add="filter">Color filter</button>
-    <button data-add="screen">Screen</button>
-    <button data-add="detector">Detector</button>
+    <h2>Add Component</h2>
+    <div class="grid">
+      <button data-add="mirror">Mirror</button>
+      <button data-add="curvedmirror">Concave mirror</button>
+      <button data-add="beamsplitter">Beam splitter</button>
+      <button data-add="polarizer">Polarizer</button>
+      <button data-add="halfwave">½-wave plate</button>
+      <button data-add="quarterwave">¼-wave plate</button>
+      <button data-add="lens">Lens</button>
+      <button data-add="prism">Prism</button>
+      <button data-add="block">Glass block</button>
+      <button data-add="filter">Color filter</button>
+      <button data-add="screen">Screen</button>
+      <button data-add="detector">Detector</button>
+    </div>
+
+    <h2>Environment</h2>
+    <div class="row"><label>Ambient medium</label>
+      <select id="ambient"></select>
+    </div>
+
+    <h2>Selected Object</h2>
+    <div id="inspector">
+      <div class="hint">Click an object in the scene to edit it. Drag to move. Shift+drag to raise/lower. Delete key
+        removes it.</div>
+    </div>
   </div>
 
-  <h2>Environment</h2>
-  <div class="row"><label>Ambient medium</label>
-    <select id="ambient"></select></div>
+  <div id="monitors"></div>
 
-  <h2>Selected Object</h2>
-  <div id="inspector"><div class="hint">Click an object in the scene to edit it. Drag to move. Shift+drag to raise/lower. Delete key removes it.</div></div>
-</div>
+  <div id="hud">
+    <div><b id="hudSegs">0</b> ray segments</div>
+    <div>Drag = orbit · Scroll = zoom · Right-drag = pan</div>
+  </div>
 
-<div id="monitors"></div>
-
-<div id="hud">
-  <div><b id="hudSegs">0</b> ray segments</div>
-  <div>Drag = orbit · Scroll = zoom · Right-drag = pan</div>
-</div>
-
-<script type="importmap">
+  <script type="importmap">
 { "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
 }}
 </script>
 
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/* ============================================================
-   0.  SCENE / RENDERER
-   ============================================================ */
-const canvas   = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
-renderer.setClearColor(0x000000, 0);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+    /* ============================================================
+       0.  SCENE / RENDERER
+       ============================================================ */
+    const canvas = document.getElementById('c');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setClearColor(0x000000, 0);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
 
-const scene = new THREE.Scene();
-scene.background = null;
-scene.fog = new THREE.Fog(0x150e2e, 30, 60);
+    const scene = new THREE.Scene();
+    scene.background = null;
+    scene.fog = new THREE.Fog(0x150e2e, 30, 60);
 
-const camera = new THREE.PerspectiveCamera(48, innerWidth/innerHeight, 0.1, 500);
-camera.position.set(8, 7.5, 11);
+    const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 500);
+    camera.position.set(8, 7.5, 11);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(0, 2, 0.5);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.maxPolarAngle = Math.PI * 0.495;
-controls.minDistance = 3;
-controls.maxDistance = 45;
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0, 2, 0.5);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI * 0.495;
+    controls.minDistance = 3;
+    controls.maxDistance = 45;
 
-scene.add(new THREE.HemisphereLight(0x9fb8ff, 0x0a0618, 1.15));
-const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(8, 14, 6); scene.add(key);
-const fill = new THREE.DirectionalLight(0x8a6fff, 0.75); fill.position.set(-10, 6, -8); scene.add(fill);
+    scene.add(new THREE.HemisphereLight(0x9fb8ff, 0x0a0618, 1.15));
+    const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(8, 14, 6); scene.add(key);
+    const fill = new THREE.DirectionalLight(0x8a6fff, 0.75); fill.position.set(-10, 6, -8); scene.add(fill);
 
-const grid = new THREE.GridHelper(40, 40, 0x3b2f6a, 0x1c1540);
-grid.position.y = 0;
-scene.add(grid);
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(40,40),
-  new THREE.MeshStandardMaterial({color:0x0e0a24, roughness:0.9, metalness:0.1})
-);
-floor.rotation.x = -Math.PI/2; floor.position.y = -0.01; scene.add(floor);
+    const grid = new THREE.GridHelper(40, 40, 0x3b2f6a, 0x1c1540);
+    grid.position.y = 0;
+    scene.add(grid);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(40, 40),
+      new THREE.MeshStandardMaterial({ color: 0x0e0a24, roughness: 0.9, metalness: 0.1 })
+    );
+    floor.rotation.x = -Math.PI / 2; floor.position.y = -0.01; scene.add(floor);
 
-/* ============================================================
-   1.  MEDIA
-   ============================================================ */
-const MEDIA = {
-  vacuum : { label:'Vacuum',            A:1.0000, B:0.0000 },
-  air    : { label:'Air',               A:1.00029,B:0.0000 },
-  water  : { label:'Water',             A:1.3230, B:0.0032 },
-  glass  : { label:'Crown glass (BK7)', A:1.5046, B:0.0042 },
-  flint  : { label:'Flint glass (dense)',A:1.6000,B:0.0120 },
-  diamond: { label:'Diamond',           A:2.3800, B:0.0080 },
-};
-function nOf(medium, wlNm){
-  const um = wlNm / 1000;
-  return medium.A + medium.B / (um*um);
-}
-
-/* ============================================================
-   2.  MATH / COLOR HELPERS
-   ============================================================ */
-const V = (x=0,y=0,z=0) => new THREE.Vector3(x,y,z);
-const clamp = (x,a,b) => Math.min(b, Math.max(a,x));
-
-const cmul  = (a,b) => [a[0]*b[0]-a[1]*b[1], a[0]*b[1]+a[1]*b[0]];
-const cadd  = (a,b) => [a[0]+b[0], a[1]+b[1]];
-const cconj = (a)   => [a[0], -a[1]];
-
-function J_unpolarized(I=1){ return {ss:I*0.5, pp:I*0.5, sp:[0,0]}; }
-function J_linear(I, ex, ey){ return {ss:I*ex*ex, pp:I*ey*ey, sp:[I*ex*ey, 0]}; }
-function J_intensity(J){ return J.ss + J.pp; }
-
-function J_scale(J, k1, k2){
-  return { ss:J.ss*k1*k1, pp:J.pp*k2*k2, sp:[J.sp[0]*k1*k2, J.sp[1]*k1*k2] };
-}
-function J_rotate(J, phi){
-  const c = Math.cos(phi), s = Math.sin(phi);
-  return {
-    ss: c*c*J.ss + s*s*J.pp + 2*c*s*J.sp[0],
-    pp: s*s*J.ss + c*c*J.pp - 2*c*s*J.sp[0],
-    sp: [ c*s*(J.pp-J.ss) + (c*c-s*s)*J.sp[0], J.sp[1] ]
-  };
-}
-function J_apply(J, U){
-  const Jm = [[[J.ss,0], J.sp], [cconj(J.sp), [J.pp,0]]];
-  const out = [[[0,0],[0,0]],[[0,0],[0,0]]];
-  for (let i=0;i<2;i++) for (let j=0;j<2;j++){
-    let acc = [0,0];
-    for (let k=0;k<2;k++) for (let l=0;l<2;l++)
-      acc = cadd(acc, cmul(cmul(U[i][k], Jm[k][l]), cconj(U[j][l])));
-    out[i][j] = acc;
-  }
-  return { ss: out[0][0][0], pp: out[1][1][0], sp: out[0][1] };
-}
-
-function wavelengthToRGB(wl){
-  let r=0,g=0,b=0;
-  if      (wl>=380 && wl<440){ r=-(wl-440)/60; b=1; }
-  else if (wl<490)           { g=(wl-440)/50;  b=1; }
-  else if (wl<510)           { g=1; b=-(wl-510)/20; }
-  else if (wl<580)           { r=(wl-510)/70;  g=1; }
-  else if (wl<645)           { r=1; g=-(wl-645)/65; }
-  else if (wl<=780)          { r=1; }
-  let f=1;
-  if      (wl>=380 && wl<420) f = 0.35 + 0.65*(wl-380)/40;
-  else if (wl>700 && wl<=780) f = 0.35 + 0.65*(780-wl)/80;
-  const ga = 0.85;
-  return [Math.pow(r*f,ga), Math.pow(g*f,ga), Math.pow(b*f,ga)];
-}
-
-function arbitraryPerp(d){
-  const a = Math.abs(d.x) < 0.9 ? V(1,0,0) : V(0,1,0);
-  return V().crossVectors(d, a).normalize();
-}
-
-/* ============================================================
-   2b.  RAY-COUNT LOG SCALE HELPERS
-   ------------------------------------------------------------
-   The slider runs 0 → 800.  That value is treated as
-        exponent × 100
-   so slider 0   → 10^0 = 1
-      slider 100 → 10^1 = 10
-      slider 200 → 10^2 = 100
-      slider 800 → 10^8 = 100,000,000
-   ============================================================ */
-function rayCountFromSlider(logVal){
-  if (logVal <= 0) return 1;
-  const v = Math.pow(10, logVal / 100);
-  return Math.max(1, Math.round(v));
-}
-function sliderFromRayCount(n){
-  if (n <= 1) return 0;
-  return Math.round(Math.log10(n) * 100);
-}
-function formatRayCount(n){
-  if (n < 1000)     return n.toString();
-  if (n < 1e6)      return n.toLocaleString();
-  if (n < 1e9)      return (n/1e6).toFixed(n < 1e7 ? 2 : 1).replace(/\.0+$/, '') + 'M';
-  return (n/1e9).toFixed(2).replace(/\.0+$/, '') + 'B';
-}
-
-/* Hard cap on rays actually generated per trace, to keep the
-   simulation from freezing when the user asks for millions.   */
-const HARD_RAY_CAP = 200000;
-
-/* ============================================================
-   3.  COMPONENT BUILDERS
-   ============================================================ */
-const components = [];
-let nextId = 1;
-let selected   = null;
-
-function clearGroup(g){
-  while (g.children.length){
-    const c = g.children.pop();
-    if (c.geometry) c.geometry.dispose();
-    if (c.material){ Array.isArray(c.material)? c.material.forEach(m=>m.dispose()) : c.material.dispose(); }
-  }
-}
-
-function plateMesh(w,h,color,o={}){
-  const geo = new THREE.BoxGeometry(w,h, o.thickness ?? 0.06);
-  const mat = new THREE.MeshStandardMaterial({
-    color, metalness:o.metalness ?? 0.15, roughness:o.roughness ?? 0.25,
-    transparent:!!o.transparent, opacity:o.opacity ?? 1,
-    emissive: o.emissive ?? 0x000000, emissiveIntensity:0.6
-  });
-  return new THREE.Mesh(geo, mat);
-}
-
-function buildMirror(comp){
-  clearGroup(comp.group);
-  const w=2.0, h=2.0;
-  const m = plateMesh(w,h,0xd8e8ff,{metalness:1, roughness:0.04, thickness:0.08});
-  m.position.z = 0.04; comp.group.add(m);
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(w+0.14,h+0.14,0.03),
-                new THREE.MeshStandardMaterial({color:0x2b3a55, roughness:0.6, metalness:0.4}));
-  frame.position.z = -0.02; comp.group.add(frame);
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'mirror', reflectivity: comp.params.reflectivity
-  }];
-}
-
-function buildCurvedMirror(comp){
-  clearGroup(comp.group);
-  const A = comp.params.aperture, R = comp.params.curvature;
-  const thMax = Math.asin(clamp(A/R,0,1));
-  const geo = new THREE.SphereGeometry(R, 48, 24, 0, Math.PI*2, 0, thMax);
-  geo.rotateX(-Math.PI/2); geo.translate(0,0,R);
-  comp.group.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
-    color:0xd8e8ff, metalness:1, roughness:0.05, side:THREE.DoubleSide
-  })));
-  comp.localSurfaces = [{
-    kind:'sphere', c:V(0,0,R), R, axis:V(0,0,-1), aperture:A,
-    behavior:'mirror', reflectivity: comp.params.reflectivity
-  }];
-}
-
-function buildBeamsplitter(comp){
-  clearGroup(comp.group);
-  const w=1.8, h=1.8;
-  const m = plateMesh(w,h,0x8fe6ff,{metalness:0.05, roughness:0.02, transparent:true, opacity:0.28, thickness:0.05, emissive:0x0a3a4a});
-  m.position.z = 0.025; comp.group.add(m);
-  comp.group.add(new THREE.Mesh(new THREE.BoxGeometry(w+0.1,h+0.1,0.02),
-             new THREE.MeshStandardMaterial({color:0x22334d, roughness:0.7})));
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'split', reflectivity: comp.params.reflectivity
-  }];
-}
-
-function buildAxisPlate(comp, color, opacity, retardanceDeg){
-  clearGroup(comp.group);
-  const w=1.8, h=1.8;
-  const m = plateMesh(w,h,color,{metalness:0.05, roughness:0.35, transparent:true, opacity, thickness:0.04});
-  comp.group.add(m);
-  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.12,h+0.12,0.02),
-             new THREE.MeshStandardMaterial({color:0x22334d, roughness:0.7}));
-  fr.position.z = -0.03; comp.group.add(fr);
-  const ang = comp.params.angle * Math.PI/180;
-  const L = w*0.44;
-  comp.group.add(new THREE.Line(
-    new THREE.BufferGeometry().setFromPoints([
-      V(-Math.cos(ang)*L, -Math.sin(ang)*L, 0.05),
-      V( Math.cos(ang)*L,  Math.sin(ang)*L, 0.05)]),
-    new THREE.LineBasicMaterial({color:0xffd166})));
-  if (retardanceDeg !== null){
-    comp.group.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        V(-Math.sin(ang)*L*0.75, Math.cos(ang)*L*0.75, 0.05),
-        V( Math.sin(ang)*L*0.75,-Math.cos(ang)*L*0.75, 0.05)]),
-      new THREE.LineBasicMaterial({color:0x8affc1})));
-  }
-  return { w, h };
-}
-
-function buildPolarizer(comp){
-  const {w,h} = buildAxisPlate(comp, 0x4a5a80, 0.45, null);
-  const ang = comp.params.angle * Math.PI/180;
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'polarizer', axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
-  }];
-}
-function buildHalfWave(comp){
-  const {w,h} = buildAxisPlate(comp, 0x5a4a80, 0.42, 180);
-  const ang = comp.params.angle * Math.PI/180;
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'waveplate', retardance: Math.PI, axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
-  }];
-}
-function buildQuarterWave(comp){
-  const {w,h} = buildAxisPlate(comp, 0x4a805a, 0.42, 90);
-  const ang = comp.params.angle * Math.PI/180;
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'waveplate', retardance: Math.PI/2, axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
-  }];
-}
-
-function buildLens(comp){
-  clearGroup(comp.group);
-  const A = comp.params.aperture, R = comp.params.curvature;
-  const t  = 2*(R - Math.sqrt(R*R - A*A));
-  const zc1 = -t/2 + R, zc2 = t/2 - R;
-  const pts = [];
-  const N = 26;
-  for (let i=0;i<=N;i++){ const r = A*i/N; pts.push(new THREE.Vector2(r, zc1 - Math.sqrt(R*R - r*r))); }
-  for (let i=N;i>=0;i--){ const r = A*i/N; pts.push(new THREE.Vector2(r, zc2 + Math.sqrt(R*R - r*r))); }
-  const geo = new THREE.LatheGeometry(pts, 56); geo.rotateX(Math.PI/2);
-  comp.group.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
-    color:0xbfe4ff, metalness:0, roughness:0.04,
-    transparent:true, opacity:0.30, side:THREE.DoubleSide, clearcoat:1, clearcoatRoughness:0.05
-  })));
-  comp.localSurfaces = [
-    { kind:'sphere', c:V(0,0,zc1), R, axis:V(0,0,-1), aperture:A, behavior:'dielectric' },
-    { kind:'sphere', c:V(0,0,zc2), R, axis:V(0,0, 1), aperture:A, behavior:'dielectric' },
-  ];
-}
-
-function buildPrism(comp){
-  clearGroup(comp.group);
-  const side = 2.0, height = 2.0, Rt = side/Math.sqrt(3);
-  const geo = new THREE.CylinderGeometry(Rt, Rt, height, 3, 1);
-  comp.group.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
-    color:0xcfe8ff, metalness:0, roughness:0.03,
-    transparent:true, opacity:0.28, side:THREE.DoubleSide, clearcoat:1, clearcoatRoughness:0.04
-  })));
-  const verts = [];
-  for (let i=0;i<3;i++){
-    const a = i*2*Math.PI/3;
-    verts.push(V(Rt*Math.sin(a), 0, Rt*Math.cos(a)));
-  }
-  comp.localSurfaces = [];
-  for (let i=0;i<3;i++){
-    const v1 = verts[i], v2 = verts[(i+1)%3];
-    const mid = v1.clone().add(v2).multiplyScalar(0.5);
-    const e = v2.clone().sub(v1).normalize();
-    comp.localSurfaces.push({
-      kind:'rect', o:mid, e1:e, e2:V(0,1,0), h1:side/2, h2:height/2, n:mid.clone().normalize(),
-      behavior:'dielectric'
-    });
-  }
-}
-
-function buildBlock(comp){
-  clearGroup(comp.group);
-  const s = comp.params.size;
-  comp.group.add(new THREE.Mesh(new THREE.BoxGeometry(s,s,s),
-    new THREE.MeshPhysicalMaterial({color:0xcfe8ff, metalness:0, roughness:0.05,
-      transparent:true, opacity:0.22, side:THREE.DoubleSide, clearcoat:1})));
-  const w=s, h=s, d=s;
-  comp.localSurfaces = [
-    {o:V( w/2,0,0), e1:V(0,0,1), e2:V(0,1,0), h1:d/2, h2:h/2, n:V( 1,0,0)},
-    {o:V(-w/2,0,0), e1:V(0,0,-1),e2:V(0,1,0), h1:d/2, h2:h/2, n:V(-1,0,0)},
-    {o:V(0, h/2,0), e1:V(1,0,0), e2:V(0,0,1), h1:w/2, h2:d/2, n:V(0, 1,0)},
-    {o:V(0,-h/2,0), e1:V(1,0,0), e2:V(0,0,-1),h1:w/2, h2:d/2, n:V(0,-1,0)},
-    {o:V(0,0, d/2), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0, 1)},
-    {o:V(0,0,-d/2), e1:V(-1,0,0),e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,-1)},
-  ].forEach(s2 => { s2.kind='rect'; s2.behavior='dielectric'; comp.localSurfaces.push(s2); });
-  comp.localSurfaces = comp.localSurfaces.filter(x=>x.kind==='rect');
-}
-
-const FILTERS = {
-  red  : wl => wl > 585 ? 0.95 : Math.max(0, 0.95*(1-(585-wl)/70)),
-  green: wl => 0.95*Math.exp(-Math.pow((wl-535)/48, 2)),
-  blue : wl => wl < 487 ? 0.95 : Math.max(0, 0.95*(1-(wl-487)/70)),
-};
-function buildFilter(comp){
-  clearGroup(comp.group);
-  const w=1.8, h=1.8;
-  const col = {red:0xff4444, green:0x44ff77, blue:0x4488ff}[comp.params.color];
-  comp.group.add(plateMesh(w,h,col,{transparent:true, opacity:0.35, roughness:0.15, thickness:0.06, emissive:col}));
-  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.12,h+0.12,0.02),
-             new THREE.MeshStandardMaterial({color:0x22334d, roughness:0.7}));
-  fr.position.z=-0.04; comp.group.add(fr);
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'filter', transmit: FILTERS[comp.params.color]
-  }];
-}
-
-/* ============================================================
-   SCREEN  &  DETECTOR
-   ============================================================ */
-const SCREEN_RES = 256;
-
-function makeScreenCanvas(bgCol, isGrid){
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = SCREEN_RES;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = bgCol;
-  ctx.fillRect(0,0,SCREEN_RES,SCREEN_RES);
-  if (isGrid){
-    ctx.strokeStyle = '#151238'; ctx.lineWidth = 1;
-    const step = SCREEN_RES/8;
-    for (let i=0;i<=8;i++){
-      const p = Math.round(i*step) + 0.5;
-      ctx.beginPath(); ctx.moveTo(p,0); ctx.lineTo(p,SCREEN_RES); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,p); ctx.lineTo(SCREEN_RES,p); ctx.stroke();
+    /* ============================================================
+       1.  MEDIA
+       ============================================================ */
+    const MEDIA = {
+      vacuum: { label: 'Vacuum', A: 1.0000, B: 0.0000 },
+      air: { label: 'Air', A: 1.00029, B: 0.0000 },
+      water: { label: 'Water', A: 1.3230, B: 0.0032 },
+      glass: { label: 'Crown glass (BK7)', A: 1.5046, B: 0.0042 },
+      flint: { label: 'Flint glass (dense)', A: 1.6000, B: 0.0120 },
+      diamond: { label: 'Diamond', A: 2.3800, B: 0.0080 },
+    };
+    function nOf(medium, wlNm) {
+      const um = wlNm / 1000;
+      return medium.A + medium.B / (um * um);
     }
-  }
-  return {canvas, ctx};
-}
 
-function initScreenAccum(comp){
-  comp.accum = new Float32Array(SCREEN_RES*SCREEN_RES*3);
-  comp.accumSize = SCREEN_RES;
-  comp.hitCount = 0; comp.totalPower = 0; comp.peak = 0; comp.illuminatedPixels = 0;
-}
+    /* ============================================================
+       2.  MATH / COLOR HELPERS
+       ============================================================ */
+    const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+    const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 
-function buildScreen(comp){
-  clearGroup(comp.group);
-  const w = 2.4, h = 2.4;
-  const {canvas, ctx} = makeScreenCanvas('#050810', false);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.minFilter = tex.magFilter = THREE.LinearFilter;
-  comp.screenCanvas = canvas; comp.screenCtx = ctx; comp.screenTex = tex;
-  initScreenAccum(comp);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide, toneMapped: false}));
-  m.position.z = 0.016; comp.group.add(m);
-  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.14, h+0.14, 0.05),
-    new THREE.MeshStandardMaterial({color:0x1a2436, roughness:0.6, metalness:0.35}));
-  fr.position.z = -0.016; comp.group.add(fr);
-  const markMat = new THREE.MeshBasicMaterial({color:0x3a5570});
-  for (const sx of [-1,1]) for (const sy of [-1,1]){
-    const c = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.055), markMat);
-    c.position.set(sx*(w/2-0.04), sy*(h/2-0.04), 0);
-    comp.group.add(c);
-  }
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'screen'
-  }];
-}
+    const cmul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+    const cadd = (a, b) => [a[0] + b[0], a[1] + b[1]];
+    const cconj = (a) => [a[0], -a[1]];
 
-function buildDetector(comp){
-  clearGroup(comp.group);
-  const w = 2.0, h = 2.0;
-  const {canvas, ctx} = makeScreenCanvas('#050810', true);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.minFilter = tex.magFilter = THREE.LinearFilter;
-  comp.screenCanvas = canvas; comp.screenCtx = ctx; comp.screenTex = tex;
-  initScreenAccum(comp);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({map: tex, side: THREE.DoubleSide, toneMapped: false}));
-  m.position.z = 0.016; comp.group.add(m);
-  const fr = new THREE.Mesh(new THREE.BoxGeometry(w+0.18, h+0.18, 0.07),
-    new THREE.MeshStandardMaterial({color:0x22303f, roughness:0.5, metalness:0.6}));
-  fr.position.z = -0.02; comp.group.add(fr);
-  const led = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8),
-    new THREE.MeshBasicMaterial({color:0x33ff88}));
-  led.position.set(w/2 - 0.14, -h/2 - 0.09, 0.045);
-  comp.group.add(led);
-  const inner = new THREE.Mesh(new THREE.PlaneGeometry(w*0.98, h*0.98),
-    new THREE.MeshBasicMaterial({color:0x0a3a4a, transparent:true, opacity:0.15}));
-  inner.position.z = 0.014; comp.group.add(inner);
-  comp.localSurfaces = [{
-    kind:'rect', o:V(0,0,0), e1:V(1,0,0), e2:V(0,1,0), h1:w/2, h2:h/2, n:V(0,0,1),
-    behavior:'detector'
-  }];
-}
+    function J_unpolarized(I = 1) { return { ss: I * 0.5, pp: I * 0.5, sp: [0, 0] }; }
+    function J_linear(I, ex, ey) { return { ss: I * ex * ex, pp: I * ey * ey, sp: [I * ex * ey, 0] }; }
+    function J_intensity(J) { return J.ss + J.pp; }
 
-const COMPONENT_TYPES = {
-  mirror: { label:'Mirror', build:buildMirror,
-    defaults:{ reflectivity:0.95 },
-    defs:[{key:'reflectivity', label:'Reflectivity', type:'range', min:0.05, max:1, step:0.01}] },
-  curvedmirror: { label:'Concave mirror', build:buildCurvedMirror,
-    defaults:{ aperture:0.85, curvature:2.6, reflectivity:0.95 },
-    defs:[
-      {key:'aperture', label:'Aperture', type:'range', min:0.2, max:1.6, step:0.05},
-      {key:'curvature', label:'Curvature R', type:'range', min:1.2, max:6, step:0.1},
-      {key:'reflectivity', label:'Reflectivity', type:'range', min:0.05, max:1, step:0.01}] },
-  beamsplitter: { label:'Beam splitter', build:buildBeamsplitter,
-    defaults:{ reflectivity:0.5 },
-    defs:[{key:'reflectivity', label:'Reflectance', type:'range', min:0, max:1, step:0.01}] },
-  polarizer: { label:'Polarizer', build:buildPolarizer,
-    defaults:{ angle:0 },
-    defs:[{key:'angle', label:'Axis angle', type:'range', min:0, max:180, step:5, unit:'°'}] },
-  halfwave: { label:'Half-wave plate', build:buildHalfWave,
-    defaults:{ angle:0 },
-    defs:[{key:'angle', label:'Fast axis', type:'range', min:0, max:180, step:5, unit:'°'}] },
-  quarterwave: { label:'Quarter-wave plate', build:buildQuarterWave,
-    defaults:{ angle:0 },
-    defs:[{key:'angle', label:'Fast axis', type:'range', min:0, max:180, step:5, unit:'°'}] },
-  lens: { label:'Lens', build:buildLens,
-    defaults:{ aperture:0.7, curvature:2.5, material:'glass' },
-    defs:[
-      {key:'aperture', label:'Aperture', type:'range', min:0.25, max:1.3, step:0.05},
-      {key:'curvature', label:'Curvature R', type:'range', min:1.2, max:6, step:0.1},
-      {key:'material', label:'Material', type:'material'}] },
-  prism: { label:'Prism', build:buildPrism,
-    defaults:{ material:'flint' },
-    defs:[{key:'material', label:'Material', type:'material'}] },
-  block: { label:'Glass block', build:buildBlock,
-    defaults:{ size:1.6, material:'glass' },
-    defs:[
-      {key:'size', label:'Size', type:'range', min:0.6, max:3, step:0.1},
-      {key:'material', label:'Material', type:'material'}] },
-  filter: { label:'Color filter', build:buildFilter,
-    defaults:{ color:'red' },
-    defs:[{key:'color', label:'Passes', type:'select',
-      options:[['red','Red'],['green','Green'],['blue','Blue']]}] },
-  screen: { label:'Screen', build:buildScreen,
-    defaults:{ gain:1.0 },
-    defs:[{key:'gain', label:'Gain', type:'range', min:0.1, max:8, step:0.1}] },
-  detector: { label:'Detector', build:buildDetector,
-    defaults:{ gain:1.0 },
-    defs:[{key:'gain', label:'Gain', type:'range', min:0.1, max:8, step:0.1}] }
-};
-
-function addComponent(type, pos, rotY){
-  const def = COMPONENT_TYPES[type];
-  const comp = {
-    id: nextId++, type, label: def.label,
-    group: new THREE.Group(),
-    params: Object.assign({}, def.defaults),
-    material: MEDIA[def.defaults.material || 'glass'],
-    localSurfaces: [], defs: def.defs || []
-  };
-  if (pos) comp.group.position.copy(pos);
-  if (rotY !== undefined) comp.group.rotation.y = rotY;
-  comp.group.userData.comp = comp;
-  scene.add(comp.group);
-  components.push(comp);
-  def.build(comp);
-  if (type === 'screen' || type === 'detector') createMonitor(comp);
-  return comp;
-}
-
-function rebuild(comp){
-  const def = COMPONENT_TYPES[comp.type];
-  comp.material = MEDIA[comp.params.material || 'glass'];
-  def.build(comp);
-  scheduleTrace();
-}
-
-/* ============================================================
-   3b.  SIDE MONITOR POPUPS
-   ============================================================ */
-const monitorsEl = document.getElementById('monitors');
-
-function createMonitor(comp){
-  const panel = document.createElement('div');
-  panel.className = 'monitor' + (comp.type === 'detector' ? ' detector-monitor' : '');
-  const header = document.createElement('div');
-  header.className = 'monitor-header';
-  const dot = document.createElement('span'); dot.className = 'monitor-dot';
-  header.appendChild(dot);
-  const title = document.createElement('span');
-  title.className = 'monitor-title';
-  title.textContent = (comp.type === 'detector' ? 'DETECTOR' : 'SCREEN') + ' #' + comp.id;
-  header.appendChild(title);
-  const close = document.createElement('button');
-  close.className = 'monitor-close'; close.textContent = '×';
-  close.title = 'Hide this view';
-  close.addEventListener('click', ()=>{
-    panel.style.display = 'none';
-    comp.monitorHidden = true;
-    refreshInspector();
-  });
-  header.appendChild(close);
-  panel.appendChild(header);
-
-  const cv = document.createElement('canvas');
-  cv.width = SCREEN_RES; cv.height = SCREEN_RES;
-  cv.className = 'monitor-canvas';
-  panel.appendChild(cv);
-
-  const ro = document.createElement('div');
-  ro.className = 'monitor-readout';
-  ro.innerHTML =
-    '<div><span>Rays</span><b>0</b></div>' +
-    '<div><span>Pwr</span><b>0.000</b></div>' +
-    '<div><span>Peak</span><b>0.000</b></div>' +
-    '<div><span>Lit</span><b>—</b></div>';
-  panel.appendChild(ro);
-
-  monitorsEl.appendChild(panel);
-  comp.monitorEl = panel; comp.monitorCanvas = cv;
-  comp.monitorCtx = cv.getContext('2d');
-  comp.monitorReadout = ro; comp.monitorHidden = false;
-  comp.monitorCtx.fillStyle = '#050810';
-  comp.monitorCtx.fillRect(0,0,SCREEN_RES,SCREEN_RES);
-}
-
-function removeMonitor(comp){
-  if (comp.monitorEl){
-    comp.monitorEl.remove();
-    comp.monitorEl = null; comp.monitorCanvas = null;
-    comp.monitorCtx = null; comp.monitorReadout = null;
-  }
-}
-
-/* ============================================================
-   4.  LIGHT SOURCE
-   ============================================================ */
-const sourceGroup = new THREE.Group();
-sourceGroup.position.set(0, 2, -5.5);
-scene.add(sourceGroup);
-
-const srcBody = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.28, 0.28, 0.85, 24),
-  new THREE.MeshStandardMaterial({color:0x2a3a58, metalness:0.85, roughness:0.25}));
-srcBody.rotation.x = Math.PI/2; sourceGroup.add(srcBody);
-
-const srcLens = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.24, 0.24, 0.07, 24),
-  new THREE.MeshStandardMaterial({color:0xffffff, emissive:0xffffff, emissiveIntensity:1.4}));
-srcLens.rotation.x = Math.PI/2; srcLens.position.z = 0.43; sourceGroup.add(srcLens);
-
-const aim = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.012,0.012,1.6,8),
-  new THREE.MeshBasicMaterial({color:0x2f4a70, transparent:true, opacity:0.6}));
-aim.rotation.x = Math.PI/2; aim.position.z = 1.1; sourceGroup.add(aim);
-
-/* ---- Torch glow sprite ---- */
-const torchGlowCanvas = document.createElement('canvas');
-torchGlowCanvas.width = torchGlowCanvas.height = 128;
-(function(){
-  const gctx = torchGlowCanvas.getContext('2d');
-  const grad = gctx.createRadialGradient(64,64,0, 64,64,64);
-  grad.addColorStop(0,    'rgba(255,255,255,1)');
-  grad.addColorStop(0.20, 'rgba(255,244,220,0.85)');
-  grad.addColorStop(0.45, 'rgba(255,225,175,0.35)');
-  grad.addColorStop(0.75, 'rgba(255,200,130,0.09)');
-  grad.addColorStop(1,    'rgba(255,180,100,0)');
-  gctx.fillStyle = grad;
-  gctx.fillRect(0,0,128,128);
-})();
-const torchGlowTex = new THREE.CanvasTexture(torchGlowCanvas);
-torchGlowTex.colorSpace = THREE.SRGBColorSpace;
-const torchGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-  map: torchGlowTex, blending: THREE.AdditiveBlending,
-  transparent: true, depthWrite: false, toneMapped: false
-}));
-torchGlow.scale.set(1.8, 1.8, 1);
-torchGlow.position.z = 0.5;
-torchGlow.visible = false;
-sourceGroup.add(torchGlow);
-
-const torchLight = new THREE.PointLight(0xffe9c8, 0, 8, 2);
-torchLight.position.z = 0.6;
-sourceGroup.add(torchLight);
-
-/* ---- Source state ---- */
-const sourceState = {
-  type:'white', pol:'unpol', radius:0.35, rays:5, spread:0, intensity:1.0,
-  get group(){ return sourceGroup; }
-};
-sourceGroup.userData.comp = sourceState;
-sourceState.label = 'Light source';
-sourceState.defs = []; sourceState.params = {};
-
-/* ---- Representation state ---- */
-let lightModel = 'beam';
-const MODEL_NOTES = {
-  ray:       'Single idealized line — no width, no wave nature. Pure geometric optics.',
-  beam:      'Parallel rays with finite width. Width from beam radius & ray count.',
-  wave:      'Electric field oscillates perpendicular to the path (E-field shown as a sine).',
-  plane:     'Straight ray with perpendicular wavefronts — equal phase fronts across the beam.',
-  spherical: 'Diverging rays from a point source, with curved wavefronts along each ray.',
-  gaussian:  'Brightness-weighted beam — rays near the axis carry more power.',
-  torch:     'Real-world white torch — the light is rendered as a soft volumetric glow. ' +
-             'Beam angle sets the cone. Brightness sets the output power.'
-};
-
-function updateSourceVisual(){
-  const isTorch = (lightModel === 'torch');
-  srcBody.visible = true;
-  srcLens.visible = true;
-  aim.visible     = !isTorch;
-  torchGlow.visible = isTorch;
-
-  if (isTorch){
-    const k = sourceState.intensity;
-    srcLens.material.emissiveIntensity = 1.6 + k * 0.6;
-    srcLens.scale.set(1.0 + k * 0.10, 1.0 + k * 0.10, 1.0);
-    torchGlow.scale.setScalar(1.6 + k * 0.55);
-    torchGlow.material.opacity = clamp(0.55 + k * 0.12, 0.4, 1.0);
-    torchLight.intensity = k * 2.4;
-    torchLight.distance  = 7 + k * 3;
-  } else {
-    srcLens.material.emissiveIntensity = 1.4;
-    srcLens.scale.set(1,1,1);
-    torchLight.intensity = 0;
-  }
-}
-
-/* ============================================================
-   5.  SURFACE COLLECTION & INTERSECTION
-   ============================================================ */
-function collectSurfaces(){
-  scene.updateMatrixWorld(true);
-  const out = [];
-  const invTmp = new THREE.Matrix4();
-  for (const comp of components){
-    const M  = comp.group.matrixWorld;
-    const NM = new THREE.Matrix3().getNormalMatrix(M);
-    invTmp.copy(M).invert();
-    for (const s of comp.localSurfaces){
-      const ws = { comp, behavior:s.behavior };
-      if (s.kind === 'rect'){
-        ws.kind = 'rect';
-        ws.o  = s.o.clone().applyMatrix4(M);
-        ws.e1 = s.e1.clone().applyMatrix3(NM).normalize();
-        ws.e2 = s.e2.clone().applyMatrix3(NM).normalize();
-        ws.n  = s.n.clone().applyMatrix3(NM).normalize();
-        ws.h1 = s.h1; ws.h2 = s.h2;
-        if (s.axisLocal) ws.axisWorld = s.axisLocal.clone().applyMatrix3(NM).normalize();
-        if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
-        if (s.retardance  !== undefined) ws.retardance  = s.retardance;
-        if (s.transmit    !== undefined) ws.transmit    = s.transmit;
-      } else {
-        ws.kind = 'sphere';
-        ws.c = s.c.clone().applyMatrix4(M);
-        ws.R = s.R;
-        ws.axis = s.axis.clone().applyMatrix3(NM).normalize();
-        ws.aperture = s.aperture;
-        if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
+    function J_scale(J, k1, k2) {
+      return { ss: J.ss * k1 * k1, pp: J.pp * k2 * k2, sp: [J.sp[0] * k1 * k2, J.sp[1] * k1 * k2] };
+    }
+    function J_rotate(J, phi) {
+      const c = Math.cos(phi), s = Math.sin(phi);
+      return {
+        ss: c * c * J.ss + s * s * J.pp + 2 * c * s * J.sp[0],
+        pp: s * s * J.ss + c * c * J.pp - 2 * c * s * J.sp[0],
+        sp: [c * s * (J.pp - J.ss) + (c * c - s * s) * J.sp[0], J.sp[1]]
+      };
+    }
+    function J_apply(J, U) {
+      const Jm = [[[J.ss, 0], J.sp], [cconj(J.sp), [J.pp, 0]]];
+      const out = [[[0, 0], [0, 0]], [[0, 0], [0, 0]]];
+      for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) {
+        let acc = [0, 0];
+        for (let k = 0; k < 2; k++) for (let l = 0; l < 2; l++)
+          acc = cadd(acc, cmul(cmul(U[i][k], Jm[k][l]), cconj(U[j][l])));
+        out[i][j] = acc;
       }
-      ws.invM = invTmp.clone();
-      out.push(ws);
+      return { ss: out[0][0][0], pp: out[1][1][0], sp: out[0][1] };
     }
-  }
-  return out;
-}
 
-function intersectSurf(s, o, d){
-  if (s.kind === 'rect'){
-    const den = s.n.dot(d);
-    if (Math.abs(den) < 1e-10) return null;
-    const t = s.o.clone().sub(o).dot(s.n) / den;
-    if (t < 1e-5) return null;
-    const p = o.clone().addScaledVector(d, t);
-    const rel = p.clone().sub(s.o);
-    if (Math.abs(rel.dot(s.e1)) > s.h1) return null;
-    if (Math.abs(rel.dot(s.e2)) > s.h2) return null;
-    return t;
-  } else {
-    const oc = o.clone().sub(s.c);
-    const b = oc.dot(d);
-    const c = oc.dot(oc) - s.R*s.R;
-    const disc = b*b - c;
-    if (disc < 0) return null;
-    const sq = Math.sqrt(disc);
-    for (const t of [-b - sq, -b + sq]){
-      if (t < 1e-5) continue;
-      const p = o.clone().addScaledVector(d, t);
-      const v = p.clone().sub(s.c);
-      const proj = v.dot(s.axis);
-      if (proj <= 0) continue;
-      const rad = v.clone().addScaledVector(s.axis, -proj).length();
-      if (rad > s.aperture) continue;
-      return t;
+    function wavelengthToRGB(wl) {
+      let r = 0, g = 0, b = 0;
+      if (wl >= 380 && wl < 440) { r = -(wl - 440) / 60; b = 1; }
+      else if (wl < 490) { g = (wl - 440) / 50; b = 1; }
+      else if (wl < 510) { g = 1; b = -(wl - 510) / 20; }
+      else if (wl < 580) { r = (wl - 510) / 70; g = 1; }
+      else if (wl < 645) { r = 1; g = -(wl - 645) / 65; }
+      else if (wl <= 780) { r = 1; }
+      let f = 1;
+      if (wl >= 380 && wl < 420) f = 0.35 + 0.65 * (wl - 380) / 40;
+      else if (wl > 700 && wl <= 780) f = 0.35 + 0.65 * (780 - wl) / 80;
+      const ga = 0.85;
+      return [Math.pow(r * f, ga), Math.pow(g * f, ga), Math.pow(b * f, ga)];
     }
-    return null;
-  }
-}
 
-function nearestHit(o, d, surfaces){
-  let bestT = Infinity, bestS = null;
-  for (const s of surfaces){
-    const t = intersectSurf(s, o, d);
-    if (t !== null && t < bestT){ bestT = t; bestS = s; }
-  }
-  if (!bestS) return null;
-  const p = o.clone().addScaledVector(d, bestT);
-  const n = (bestS.kind === 'rect') ? bestS.n.clone() : p.clone().sub(bestS.c).normalize();
-  return { surf:bestS, t:bestT, p, n };
-}
-
-/* ============================================================
-   6.  RAY TRACING
-   ------------------------------------------------------------
-   The raw-segment buffer is now much larger so that very high
-   ray counts can actually be displayed.  Note that the actual
-   ray count is clamped to HARD_RAY_CAP for performance.
-   ============================================================ */
-const MAX_DEPTH      = 22;
-const MAX_TRACE_SEGS = 500000;    // raw segments held for visualisation
-const MAX_VIS_SEGS   = 3000000;   // line-mode vertex buffer (×6 floats)
-const MAX_POINTS     = 3000000;   // torch point-cloud buffer
-const MAX_PROC       = 3000000;   // max stepRay() calls per trace
-const MIN_INT        = 0.0025;
-
-/* --- line buffers --- */
-let segPositions, segColors, segGeo, segLines, segCount = 0;
-
-(function initSegBuffers(){
-  segPositions = new Float32Array(MAX_VIS_SEGS * 6);
-  segColors    = new Float32Array(MAX_VIS_SEGS * 6);
-  segGeo = new THREE.BufferGeometry();
-  segGeo.setAttribute('position', new THREE.BufferAttribute(segPositions, 3));
-  segGeo.setAttribute('color',    new THREE.BufferAttribute(segColors, 3));
-  segGeo.setDrawRange(0, 0);
-  const mat = new THREE.LineBasicMaterial({
-    vertexColors:true, transparent:true, opacity:0.95,
-    blending:THREE.AdditiveBlending, depthWrite:false
-  });
-  segLines = new THREE.LineSegments(segGeo, mat);
-  segLines.frustumCulled = false;
-  scene.add(segLines);
-})();
-
-/* --- point cloud buffer (torch mode) --- */
-let ptPositions, ptColors, ptGeo, ptPoints, ptCount = 0;
-
-(function initPointBuffers(){
-  ptPositions = new Float32Array(MAX_POINTS * 3);
-  ptColors    = new Float32Array(MAX_POINTS * 3);
-  ptGeo = new THREE.BufferGeometry();
-  ptGeo.setAttribute('position', new THREE.BufferAttribute(ptPositions, 3));
-  ptGeo.setAttribute('color',    new THREE.BufferAttribute(ptColors, 3));
-  ptGeo.setDrawRange(0, 0);
-
-  const c = document.createElement('canvas');
-  c.width = c.height = 64;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(32,32,0, 32,32,32);
-  g.addColorStop(0.0, 'rgba(255,255,255,1.0)');
-  g.addColorStop(0.22,'rgba(255,255,255,0.72)');
-  g.addColorStop(0.55,'rgba(255,255,255,0.22)');
-  g.addColorStop(1.0, 'rgba(255,255,255,0.0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,64,64);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-
-  const mat = new THREE.PointsMaterial({
-    size: 0.24,
-    map: tex,
-    vertexColors: true,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    sizeAttenuation: true,
-    toneMapped: false,
-  });
-  ptPoints = new THREE.Points(ptGeo, mat);
-  ptPoints.frustumCulled = false;
-  ptPoints.visible = false;
-  scene.add(ptPoints);
-})();
-
-let ambientMedium = MEDIA.air;
-
-const traceSegments = [];
-
-function collectSegment(a, b, d, s, wl, J, r0){
-  if (traceSegments.length >= MAX_TRACE_SEGS) return;
-  traceSegments.push({
-    ax:a.x, ay:a.y, az:a.z,
-    bx:b.x, by:b.y, bz:b.z,
-    dx:d.x, dy:d.y, dz:d.z,
-    sx:s.x, sy:s.y, sz:s.z,
-    wl, I: J_intensity(J),
-    r0: r0 || 0
-  });
-}
-
-function addLineF(ax,ay,az, bx,by,bz, r,g,b){
-  if (segCount >= MAX_VIS_SEGS) return;
-  const i6 = segCount*6;
-  segPositions[i6  ] = ax; segPositions[i6+1] = ay; segPositions[i6+2] = az;
-  segPositions[i6+3] = bx; segPositions[i6+4] = by; segPositions[i6+5] = bz;
-  segColors[i6  ] = r; segColors[i6+1] = g; segColors[i6+2] = b;
-  segColors[i6+3] = r; segColors[i6+4] = g; segColors[i6+5] = b;
-  segCount++;
-}
-
-const SRC_POS = new THREE.Vector3();
-
-function drawTraceSegment(t, time){
-  const I = t.I;
-  if (I < 0.003) return;
-
-  let bright = Math.pow(I, 0.75);
-
-  if (lightModel === 'gaussian'){
-    const w = Math.max(0.05, sourceState.radius);
-    const g = Math.exp(-(t.r0*t.r0)/(w*w));
-    bright *= Math.pow(g, 0.4);
-  }
-
-  const col = wavelengthToRGB(t.wl);
-  const r = col[0]*bright, g = col[1]*bright, b = col[2]*bright;
-  if (r+g+b < 0.005) return;
-
-  const dxs = t.bx-t.ax, dys = t.by-t.ay, dzs = t.bz-t.az;
-  const len = Math.hypot(dxs,dys,dzs);
-  if (len < 1e-6) return;
-
-  if (lightModel === 'ray' || lightModel === 'beam' || lightModel === 'gaussian'){
-    addLineF(t.ax,t.ay,t.az, t.bx,t.by,t.bz, r,g,b);
-    return;
-  }
-
-  const visWl = Math.max(0.20, 0.42 * (t.wl / 550));
-
-  if (lightModel === 'wave'){
-    const amp = Math.min(0.075, visWl*0.30);
-    const nCycles = len / visWl;
-    const samples = Math.max(3, Math.min(90, Math.ceil(nCycles * 5)));
-    const phase0 = time * 4.0;
-    const kPerLen = (Math.PI*2) / visWl;
-
-    let prevX = t.ax + t.sx * Math.sin(phase0) * amp;
-    let prevY = t.ay + t.sy * Math.sin(phase0) * amp;
-    let prevZ = t.az + t.sz * Math.sin(phase0) * amp;
-
-    for (let i=1; i<=samples; i++){
-      if (segCount >= MAX_VIS_SEGS - 4) return;
-      const tt = i/samples;
-      const off = Math.sin(phase0 + (tt*len) * kPerLen) * amp;
-      const px = t.ax + dxs*tt + t.sx*off;
-      const py = t.ay + dys*tt + t.sy*off;
-      const pz = t.az + dzs*tt + t.sz*off;
-      addLineF(prevX,prevY,prevZ, px,py,pz, r,g,b);
-      prevX = px; prevY = py; prevZ = pz;
+    function arbitraryPerp(d) {
+      const a = Math.abs(d.x) < 0.9 ? V(1, 0, 0) : V(0, 1, 0);
+      return V().crossVectors(d, a).normalize();
     }
-    return;
-  }
 
-  // plane / spherical
-  addLineF(t.ax,t.ay,t.az, t.bx,t.by,t.bz, r,g,b);
-  const tickHalf = lightModel === 'spherical' ? 0.14 : 0.11;
-  const nTicks = Math.max(0, Math.min(40, Math.floor(len / visWl)));
-  for (let i=1; i<=nTicks; i++){
-    if (segCount >= MAX_VIS_SEGS - 4) return;
-    const tt = (i-0.5)/nTicks;
-    const cx = t.ax + dxs*tt, cy = t.ay + dys*tt, cz = t.az + dzs*tt;
-    addLineF(
-      cx + t.sx*tickHalf, cy + t.sy*tickHalf, cz + t.sz*tickHalf,
-      cx - t.sx*tickHalf, cy - t.sy*tickHalf, cz - t.sz*tickHalf,
-      r,g,b);
-  }
-}
-
-function sampleSegmentToPoints(t){
-  const I = t.I;
-  if (I < 0.004) return;
-
-  const dxs = t.bx - t.ax, dys = t.by - t.ay, dzs = t.bz - t.az;
-  const len = Math.hypot(dxs, dys, dzs);
-  if (len < 0.001) return;
-
-  const col = wavelengthToRGB(t.wl);
-  const baseBright = Math.pow(I, 0.85);
-
-  const spacing = 0.22;
-  const N = Math.min(50, Math.max(3, Math.ceil(len / spacing)));
-
-  for (let i = 0; i <= N; i++){
-    if (ptCount >= MAX_POINTS - 4) return;
-    const tt = i / N;
-    const x = t.ax + dxs*tt;
-    const y = t.ay + dys*tt;
-    const z = t.az + dzs*tt;
-
-    const dSrc = Math.hypot(x - SRC_POS.x, y - SRC_POS.y, z - SRC_POS.z);
-    const fall = 1.0 / (1.0 + dSrc * dSrc * 0.018);
-
-    const b = baseBright * fall * 0.22;
-    if (b < 0.0035) continue;
-
-    const i3 = ptCount * 3;
-    ptPositions[i3  ] = x;
-    ptPositions[i3+1] = y;
-    ptPositions[i3+2] = z;
-    ptColors[i3  ] = col[0] * b;
-    ptColors[i3+1] = col[1] * b;
-    ptColors[i3+2] = col[2] * b;
-    ptCount++;
-  }
-}
-
-function renderVisuals(time){
-  segCount = 0;
-  ptCount  = 0;
-
-  scene.updateMatrixWorld(true);
-  SRC_POS.setFromMatrixPosition(sourceGroup.matrixWorld);
-
-  if (lightModel === 'torch'){
-    ptPoints.visible = true;
-    for (let k = 0; k < traceSegments.length; k++){
-      if (ptCount >= MAX_POINTS - 200) break;
-      sampleSegmentToPoints(traceSegments[k]);
+    /* ============================================================
+       2b.  RAY-COUNT LOG SCALE HELPERS
+       ------------------------------------------------------------
+       The slider runs 0 → 800.  That value is treated as
+            exponent × 100
+       so slider 0   → 10^0 = 1
+          slider 100 → 10^1 = 10
+          slider 200 → 10^2 = 100
+          slider 800 → 10^8 = 100,000,000
+       ============================================================ */
+    function rayCountFromSlider(logVal) {
+      if (logVal <= 0) return 1;
+      const v = Math.pow(10, logVal / 100);
+      return Math.max(1, Math.round(v));
     }
-    ptGeo.attributes.position.needsUpdate = true;
-    ptGeo.attributes.color.needsUpdate = true;
-    ptGeo.setDrawRange(0, ptCount);
-
-    segGeo.setDrawRange(0, 0);
-    document.getElementById('hudSegs').textContent = ptCount.toLocaleString() + ' pts';
-    return;
-  }
-
-  ptPoints.visible = false;
-  const N = traceSegments.length;
-  let stride = 1;
-  if (lightModel === 'wave' && N > 650)        stride = Math.ceil(N / 650);
-  else if ((lightModel === 'plane' || lightModel === 'spherical') && N > 1500)
-    stride = Math.ceil(N / 1500);
-
-  for (let k=0; k<N; k+=stride){
-    if (segCount >= MAX_VIS_SEGS - 200) break;
-    drawTraceSegment(traceSegments[k], time);
-  }
-
-  segGeo.attributes.position.needsUpdate = true;
-  segGeo.attributes.color.needsUpdate = true;
-  segGeo.setDrawRange(0, segCount*2);
-  document.getElementById('hudSegs').textContent = segCount.toLocaleString();
-}
-
-/* ---------- Ray-tracing step ---------- */
-function stepRay(ray, surfaces, queue){
-  if (ray.depth > MAX_DEPTH) return;
-
-  const hit = nearestHit(ray.o, ray.d, surfaces);
-  const end = hit ? hit.p : ray.o.clone().addScaledVector(ray.d, 400);
-  collectSegment(ray.o, end, ray.d, ray.s, ray.wl, ray.J, ray.r0);
-  if (!hit) return;
-
-  const surf = hit.surf;
-  const d = ray.d;
-  let n = hit.n.clone();
-  let cosi = -d.dot(n);
-  if (cosi < 0){ n.negate(); cosi = -cosi; }
-  cosi = clamp(cosi, 0, 1);
-
-  let sNew = V().crossVectors(d, n);
-  if (sNew.lengthSq() < 1e-14) sNew = arbitraryPerp(d);
-  sNew.normalize();
-
-  let J = ray.J;
-  if (ray.s){
-    const pOld = V().crossVectors(ray.s, d);
-    const alpha = sNew.dot(ray.s);
-    const beta  = sNew.dot(pOld);
-    const phi = Math.atan2(beta, alpha);
-    if (Math.abs(phi) > 1e-9) J = J_rotate(J, phi);
-  }
-  if (J_intensity(J) < MIN_INT) return;
-
-  const p   = hit.p;
-  const eps = 4e-4;
-  const depth = ray.depth + 1;
-  const wl = ray.wl;
-  const reflectDir = d.clone().addScaledVector(n, -2*d.dot(n)).normalize();
-
-  switch (surf.behavior){
-    case 'mirror': {
-      const k = Math.sqrt(surf.reflectivity ?? 0.95);
-      queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
-                   J:J_scale(J,k,k), wl, inside:ray.inside, depth, r0:ray.r0 });
-      break;
+    function sliderFromRayCount(n) {
+      if (n <= 1) return 0;
+      return Math.round(Math.log10(n) * 100);
     }
-    case 'split': {
-      const R = surf.reflectivity ?? 0.5;
-      if (R > 0.001){
-        const k = Math.sqrt(R);
-        queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
-                     J:J_scale(J,k,k), wl, inside:ray.inside, depth, r0:ray.r0 });
+    function formatRayCount(n) {
+      if (n < 1000) return n.toString();
+      if (n < 1e6) return n.toLocaleString();
+      if (n < 1e9) return (n / 1e6).toFixed(n < 1e7 ? 2 : 1).replace(/\.0+$/, '') + 'M';
+      return (n / 1e9).toFixed(2).replace(/\.0+$/, '') + 'B';
+    }
+
+    /* Hard cap on rays actually generated per trace, to keep the
+       simulation from freezing when the user asks for millions.   */
+    const HARD_RAY_CAP = 200000;
+
+    /* ============================================================
+       3.  COMPONENT BUILDERS
+       ============================================================ */
+    const components = [];
+    let nextId = 1;
+    let selected = null;
+
+    function clearGroup(g) {
+      while (g.children.length) {
+        const c = g.children.pop();
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) { Array.isArray(c.material) ? c.material.forEach(m => m.dispose()) : c.material.dispose(); }
       }
-      if (R < 0.999){
-        const k = Math.sqrt(1-R);
-        queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
-                     J:J_scale(J,k,k), wl, inside:ray.inside, depth, r0:ray.r0 });
+    }
+
+    function plateMesh(w, h, color, o = {}) {
+      const geo = new THREE.BoxGeometry(w, h, o.thickness ?? 0.06);
+      const mat = new THREE.MeshStandardMaterial({
+        color, metalness: o.metalness ?? 0.15, roughness: o.roughness ?? 0.25,
+        transparent: !!o.transparent, opacity: o.opacity ?? 1,
+        emissive: o.emissive ?? 0x000000, emissiveIntensity: 0.6
+      });
+      return new THREE.Mesh(geo, mat);
+    }
+
+    function buildMirror(comp) {
+      clearGroup(comp.group);
+      const w = 2.0, h = 2.0;
+      const m = plateMesh(w, h, 0xd8e8ff, { metalness: 1, roughness: 0.04, thickness: 0.08 });
+      m.position.z = 0.04; comp.group.add(m);
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.14, h + 0.14, 0.03),
+        new THREE.MeshStandardMaterial({ color: 0x2b3a55, roughness: 0.6, metalness: 0.4 }));
+      frame.position.z = -0.02; comp.group.add(frame);
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'mirror', reflectivity: comp.params.reflectivity
+      }];
+    }
+
+    function buildCurvedMirror(comp) {
+      clearGroup(comp.group);
+      const A = comp.params.aperture, R = comp.params.curvature;
+      const thMax = Math.asin(clamp(A / R, 0, 1));
+      const geo = new THREE.SphereGeometry(R, 48, 24, 0, Math.PI * 2, 0, thMax);
+      geo.rotateX(-Math.PI / 2); geo.translate(0, 0, R);
+      comp.group.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color: 0xd8e8ff, metalness: 1, roughness: 0.05, side: THREE.DoubleSide
+      })));
+      comp.localSurfaces = [{
+        kind: 'sphere', c: V(0, 0, R), R, axis: V(0, 0, -1), aperture: A,
+        behavior: 'mirror', reflectivity: comp.params.reflectivity
+      }];
+    }
+
+    function buildBeamsplitter(comp) {
+      clearGroup(comp.group);
+      const w = 1.8, h = 1.8;
+      const m = plateMesh(w, h, 0x8fe6ff, { metalness: 0.05, roughness: 0.02, transparent: true, opacity: 0.28, thickness: 0.05, emissive: 0x0a3a4a });
+      m.position.z = 0.025; comp.group.add(m);
+      comp.group.add(new THREE.Mesh(new THREE.BoxGeometry(w + 0.1, h + 0.1, 0.02),
+        new THREE.MeshStandardMaterial({ color: 0x22334d, roughness: 0.7 })));
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'split', reflectivity: comp.params.reflectivity
+      }];
+    }
+
+    function buildAxisPlate(comp, color, opacity, retardanceDeg) {
+      clearGroup(comp.group);
+      const w = 1.8, h = 1.8;
+      const m = plateMesh(w, h, color, { metalness: 0.05, roughness: 0.35, transparent: true, opacity, thickness: 0.04 });
+      comp.group.add(m);
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.02),
+        new THREE.MeshStandardMaterial({ color: 0x22334d, roughness: 0.7 }));
+      fr.position.z = -0.03; comp.group.add(fr);
+      const ang = comp.params.angle * Math.PI / 180;
+      const L = w * 0.44;
+      comp.group.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          V(-Math.cos(ang) * L, -Math.sin(ang) * L, 0.05),
+          V(Math.cos(ang) * L, Math.sin(ang) * L, 0.05)]),
+        new THREE.LineBasicMaterial({ color: 0xffd166 })));
+      if (retardanceDeg !== null) {
+        comp.group.add(new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            V(-Math.sin(ang) * L * 0.75, Math.cos(ang) * L * 0.75, 0.05),
+            V(Math.sin(ang) * L * 0.75, -Math.cos(ang) * L * 0.75, 0.05)]),
+          new THREE.LineBasicMaterial({ color: 0x8affc1 })));
       }
-      break;
+      return { w, h };
     }
-    case 'polarizer': {
-      const axis = surf.axisWorld.clone();
-      axis.addScaledVector(d, -axis.dot(d));
-      if (axis.lengthSq() < 1e-12) break;
-      axis.normalize();
-      const pv = V().crossVectors(sNew, d).normalize();
-      const th = Math.atan2(axis.dot(pv), axis.dot(sNew));
-      const c = Math.cos(th), s = Math.sin(th);
-      const U = [[[c*c,0],[c*s,0]],[[c*s,0],[s*s,0]]];
-      const J2 = J_apply(J, U);
-      if (J_intensity(J2) < MIN_INT) break;
-      queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
-                   J:J2, wl, inside:ray.inside, depth, r0:ray.r0 });
-      break;
+
+    function buildPolarizer(comp) {
+      const { w, h } = buildAxisPlate(comp, 0x4a5a80, 0.45, null);
+      const ang = comp.params.angle * Math.PI / 180;
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'polarizer', axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
+      }];
     }
-    case 'waveplate': {
-      const axis = surf.axisWorld.clone();
-      axis.addScaledVector(d, -axis.dot(d));
-      if (axis.lengthSq() < 1e-12) break;
-      axis.normalize();
-      const pv = V().crossVectors(sNew, d).normalize();
-      const th = Math.atan2(axis.dot(pv), axis.dot(sNew));
-      const c = Math.cos(th), s = Math.sin(th);
-      const delta = surf.retardance;
-      const cd = Math.cos(delta), sd = Math.sin(delta);
-      const U = [
-        [ [c*c + s*s*cd,      s*s*sd ], [ c*s*(1-cd),  -c*s*sd ] ],
-        [ [c*s*(1-cd),       -c*s*sd ], [ s*s + c*c*cd, c*c*sd ] ]
+    function buildHalfWave(comp) {
+      const { w, h } = buildAxisPlate(comp, 0x5a4a80, 0.42, 180);
+      const ang = comp.params.angle * Math.PI / 180;
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'waveplate', retardance: Math.PI, axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
+      }];
+    }
+    function buildQuarterWave(comp) {
+      const { w, h } = buildAxisPlate(comp, 0x4a805a, 0.42, 90);
+      const ang = comp.params.angle * Math.PI / 180;
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'waveplate', retardance: Math.PI / 2, axisLocal: V(Math.cos(ang), Math.sin(ang), 0)
+      }];
+    }
+
+    function buildLens(comp) {
+      clearGroup(comp.group);
+      const A = comp.params.aperture, R = comp.params.curvature;
+      const t = 2 * (R - Math.sqrt(R * R - A * A));
+      const zc1 = -t / 2 + R, zc2 = t / 2 - R;
+      const pts = [];
+      const N = 26;
+      for (let i = 0; i <= N; i++) { const r = A * i / N; pts.push(new THREE.Vector2(r, zc1 - Math.sqrt(R * R - r * r))); }
+      for (let i = N; i >= 0; i--) { const r = A * i / N; pts.push(new THREE.Vector2(r, zc2 + Math.sqrt(R * R - r * r))); }
+      const geo = new THREE.LatheGeometry(pts, 56); geo.rotateX(Math.PI / 2);
+      comp.group.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+        color: 0xbfe4ff, metalness: 0, roughness: 0.04,
+        transparent: true, opacity: 0.30, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.05
+      })));
+      comp.localSurfaces = [
+        { kind: 'sphere', c: V(0, 0, zc1), R, axis: V(0, 0, -1), aperture: A, behavior: 'dielectric' },
+        { kind: 'sphere', c: V(0, 0, zc2), R, axis: V(0, 0, 1), aperture: A, behavior: 'dielectric' },
       ];
-      const J2 = J_apply(J, U);
-      if (J_intensity(J2) < MIN_INT) break;
-      queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
-                   J:J2, wl, inside:ray.inside, depth, r0:ray.r0 });
-      break;
     }
-    case 'filter': {
-      const T = surf.transmit(wl);
-      if (T <= 0.002) break;
-      const k = Math.sqrt(T);
-      queue.push({ o:p.clone().addScaledVector(d, eps), d:d.clone(), s:sNew,
-                   J:J_scale(J,k,k), wl, inside:ray.inside, depth, r0:ray.r0 });
-      break;
+
+    function buildPrism(comp) {
+      clearGroup(comp.group);
+      const side = 2.0, height = 2.0, Rt = side / Math.sqrt(3);
+      const geo = new THREE.CylinderGeometry(Rt, Rt, height, 3, 1);
+      comp.group.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+        color: 0xcfe8ff, metalness: 0, roughness: 0.03,
+        transparent: true, opacity: 0.28, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.04
+      })));
+      const verts = [];
+      for (let i = 0; i < 3; i++) {
+        const a = i * 2 * Math.PI / 3;
+        verts.push(V(Rt * Math.sin(a), 0, Rt * Math.cos(a)));
+      }
+      comp.localSurfaces = [];
+      for (let i = 0; i < 3; i++) {
+        const v1 = verts[i], v2 = verts[(i + 1) % 3];
+        const mid = v1.clone().add(v2).multiplyScalar(0.5);
+        const e = v2.clone().sub(v1).normalize();
+        comp.localSurfaces.push({
+          kind: 'rect', o: mid, e1: e, e2: V(0, 1, 0), h1: side / 2, h2: height / 2, n: mid.clone().normalize(),
+          behavior: 'dielectric'
+        });
+      }
     }
-    case 'screen':
-    case 'detector': {
-      const comp = surf.comp;
-      if (comp && comp.accum && surf.invM){
-        const local = p.clone().applyMatrix4(surf.invM);
-        const u = local.x, v = local.y;
-        const N = comp.accumSize;
-        const px = Math.floor((u / surf.h1 * 0.5 + 0.5) * N);
-        const py = Math.floor((0.5 - v / surf.h2 * 0.5) * N);
-        if (px >= 0 && px < N && py >= 0 && py < N){
-          const I = J_intensity(J);
-          splatAccum(comp, px, py, wavelengthToRGB(wl), I);
-          comp.hitCount++;
-          comp.totalPower += I;
+
+    function buildBlock(comp) {
+      clearGroup(comp.group);
+      const s = comp.params.size;
+      comp.group.add(new THREE.Mesh(new THREE.BoxGeometry(s, s, s),
+        new THREE.MeshPhysicalMaterial({
+          color: 0xcfe8ff, metalness: 0, roughness: 0.05,
+          transparent: true, opacity: 0.22, side: THREE.DoubleSide, clearcoat: 1
+        })));
+      const w = s, h = s, d = s;
+      comp.localSurfaces = [
+        { o: V(w / 2, 0, 0), e1: V(0, 0, 1), e2: V(0, 1, 0), h1: d / 2, h2: h / 2, n: V(1, 0, 0) },
+        { o: V(-w / 2, 0, 0), e1: V(0, 0, -1), e2: V(0, 1, 0), h1: d / 2, h2: h / 2, n: V(-1, 0, 0) },
+        { o: V(0, h / 2, 0), e1: V(1, 0, 0), e2: V(0, 0, 1), h1: w / 2, h2: d / 2, n: V(0, 1, 0) },
+        { o: V(0, -h / 2, 0), e1: V(1, 0, 0), e2: V(0, 0, -1), h1: w / 2, h2: d / 2, n: V(0, -1, 0) },
+        { o: V(0, 0, d / 2), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1) },
+        { o: V(0, 0, -d / 2), e1: V(-1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, -1) },
+      ].forEach(s2 => { s2.kind = 'rect'; s2.behavior = 'dielectric'; comp.localSurfaces.push(s2); });
+      comp.localSurfaces = comp.localSurfaces.filter(x => x.kind === 'rect');
+    }
+
+    const FILTERS = {
+      red: wl => wl > 585 ? 0.95 : Math.max(0, 0.95 * (1 - (585 - wl) / 70)),
+      green: wl => 0.95 * Math.exp(-Math.pow((wl - 535) / 48, 2)),
+      blue: wl => wl < 487 ? 0.95 : Math.max(0, 0.95 * (1 - (wl - 487) / 70)),
+    };
+    function buildFilter(comp) {
+      clearGroup(comp.group);
+      const w = 1.8, h = 1.8;
+      const col = { red: 0xff4444, green: 0x44ff77, blue: 0x4488ff }[comp.params.color];
+      comp.group.add(plateMesh(w, h, col, { transparent: true, opacity: 0.35, roughness: 0.15, thickness: 0.06, emissive: col }));
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.02),
+        new THREE.MeshStandardMaterial({ color: 0x22334d, roughness: 0.7 }));
+      fr.position.z = -0.04; comp.group.add(fr);
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'filter', transmit: FILTERS[comp.params.color]
+      }];
+    }
+
+    /* ============================================================
+       SCREEN  &  DETECTOR
+       ============================================================ */
+    const SCREEN_RES = 256;
+
+    function makeScreenCanvas(bgCol, isGrid) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = SCREEN_RES;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = bgCol;
+      ctx.fillRect(0, 0, SCREEN_RES, SCREEN_RES);
+      if (isGrid) {
+        ctx.strokeStyle = '#151238'; ctx.lineWidth = 1;
+        const step = SCREEN_RES / 8;
+        for (let i = 0; i <= 8; i++) {
+          const p = Math.round(i * step) + 0.5;
+          ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, SCREEN_RES); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(SCREEN_RES, p); ctx.stroke();
         }
       }
-      break;
+      return { canvas, ctx };
     }
-    case 'dielectric': {
-      const n1 = ray.inside ? nOf(ray.inside.material, wl) : nOf(ambientMedium, wl);
-      const n2 = (ray.inside === surf.comp) ? nOf(ambientMedium, wl) : nOf(surf.comp.material, wl);
-      const eta = n1 / n2;
-      const sin2t = eta*eta*(1 - cosi*cosi);
-      if (sin2t >= 1.0){
-        queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
-                     J:J, wl, inside:ray.inside, depth, r0:ray.r0 });
-        break;
-      }
-      const cost = Math.sqrt(1 - sin2t);
-      const rs  = (n1*cosi - n2*cost) / (n1*cosi + n2*cost);
-      const rp  = (n2*cosi - n1*cost) / (n2*cosi + n1*cost);
-      const ts0 = 2*n1*cosi / (n1*cosi + n2*cost);
-      const tp0 = 2*n1*cosi / (n2*cosi + n1*cost);
-      const fac = Math.sqrt(Math.max(0, (n2*cost) / (n1*cosi)));
-      const ts = ts0*fac, tp = tp0*fac;
-      const Jr = J_scale(J, rs, rp);
-      const Jt = J_scale(J, ts, tp);
-      const I0 = J_intensity(J);
-      if (J_intensity(Jr) > MIN_INT && J_intensity(Jr) > 0.004*I0){
-        queue.push({ o:p.clone().addScaledVector(reflectDir, eps), d:reflectDir, s:sNew,
-                     J:Jr, wl, inside:ray.inside, depth, r0:ray.r0 });
-      }
-      if (J_intensity(Jt) > MIN_INT){
-        const dt = d.clone().multiplyScalar(eta).addScaledVector(n, eta*cosi - cost).normalize();
-        const newInside = (ray.inside === surf.comp) ? null : surf.comp;
-        queue.push({ o:p.clone().addScaledVector(dt, eps), d:dt, s:sNew,
-                     J:Jt, wl, inside:newInside, depth, r0:ray.r0 });
-      }
-      break;
+
+    function initScreenAccum(comp) {
+      comp.accum = new Float32Array(SCREEN_RES * SCREEN_RES * 3);
+      comp.accumSize = SCREEN_RES;
+      comp.hitCount = 0; comp.totalPower = 0; comp.peak = 0; comp.illuminatedPixels = 0;
     }
-  }
-}
 
-/* ---------- generate initial rays ---------- */
-function makeInitialRays(){
-  const rays = [];
-  const M = sourceGroup.matrixWorld;
-  const origin = new THREE.Vector3().setFromMatrixPosition(M);
-  const q = sourceGroup.quaternion;
-  const dir   = V(0,0,1).applyQuaternion(q).normalize();
-  const right = V(1,0,0).applyQuaternion(q).normalize();
-  const up    = V(0,1,0).applyQuaternion(q).normalize();
+    function buildScreen(comp) {
+      clearGroup(comp.group);
+      const w = 2.4, h = 2.4;
+      const { canvas, ctx } = makeScreenCanvas('#050810', false);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.minFilter = tex.magFilter = THREE.LinearFilter;
+      comp.screenCanvas = canvas; comp.screenCtx = ctx; comp.screenTex = tex;
+      initScreenAccum(comp);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false }));
+      m.position.z = 0.016; comp.group.add(m);
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.14, h + 0.14, 0.05),
+        new THREE.MeshStandardMaterial({ color: 0x1a2436, roughness: 0.6, metalness: 0.35 }));
+      fr.position.z = -0.016; comp.group.add(fr);
+      const markMat = new THREE.MeshBasicMaterial({ color: 0x3a5570 });
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+        const c = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.055), markMat);
+        c.position.set(sx * (w / 2 - 0.04), sy * (h / 2 - 0.04), 0);
+        comp.group.add(c);
+      }
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'screen'
+      }];
+    }
 
-  const I = sourceState.intensity;
-  // Clamp requested ray count to what we can actually handle in one pass
-  const requestedRays = sourceState.rays;
-  const actualRays    = Math.min(requestedRays, HARD_RAY_CAP);
+    function buildDetector(comp) {
+      clearGroup(comp.group);
+      const w = 2.0, h = 2.0;
+      const { canvas, ctx } = makeScreenCanvas('#050810', true);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.minFilter = tex.magFilter = THREE.LinearFilter;
+      comp.screenCanvas = canvas; comp.screenCtx = ctx; comp.screenTex = tex;
+      initScreenAccum(comp);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, toneMapped: false }));
+      m.position.z = 0.016; comp.group.add(m);
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.18, h + 0.18, 0.07),
+        new THREE.MeshStandardMaterial({ color: 0x22303f, roughness: 0.5, metalness: 0.6 }));
+      fr.position.z = -0.02; comp.group.add(fr);
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 8),
+        new THREE.MeshBasicMaterial({ color: 0x33ff88 }));
+      led.position.set(w / 2 - 0.14, -h / 2 - 0.09, 0.045);
+      comp.group.add(led);
+      const inner = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.98, h * 0.98),
+        new THREE.MeshBasicMaterial({ color: 0x0a3a4a, transparent: true, opacity: 0.15 }));
+      inner.position.z = 0.014; comp.group.add(inner);
+      comp.localSurfaces = [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0), h1: w / 2, h2: h / 2, n: V(0, 0, 1),
+        behavior: 'detector'
+      }];
+    }
 
-  /* =========================================================
-     TORCH MODE
-     ========================================================= */
-  if (lightModel === 'torch'){
-    const nDir = Math.max(24, actualRays);
-    const halfAngle = Math.max(sourceState.spread, 6) * Math.PI/180;
-    const cosHalf = Math.cos(halfAngle);
+    const COMPONENT_TYPES = {
+      mirror: {
+        label: 'Mirror', build: buildMirror,
+        defaults: { reflectivity: 0.95 },
+        defs: [{ key: 'reflectivity', label: 'Reflectivity', type: 'range', min: 0.05, max: 1, step: 0.01 }]
+      },
+      curvedmirror: {
+        label: 'Concave mirror', build: buildCurvedMirror,
+        defaults: { aperture: 0.85, curvature: 2.6, reflectivity: 0.95 },
+        defs: [
+          { key: 'aperture', label: 'Aperture', type: 'range', min: 0.2, max: 1.6, step: 0.05 },
+          { key: 'curvature', label: 'Curvature R', type: 'range', min: 1.2, max: 6, step: 0.1 },
+          { key: 'reflectivity', label: 'Reflectivity', type: 'range', min: 0.05, max: 1, step: 0.01 }]
+      },
+      beamsplitter: {
+        label: 'Beam splitter', build: buildBeamsplitter,
+        defaults: { reflectivity: 0.5 },
+        defs: [{ key: 'reflectivity', label: 'Reflectance', type: 'range', min: 0, max: 1, step: 0.01 }]
+      },
+      polarizer: {
+        label: 'Polarizer', build: buildPolarizer,
+        defaults: { angle: 0 },
+        defs: [{ key: 'angle', label: 'Axis angle', type: 'range', min: 0, max: 180, step: 5, unit: '°' }]
+      },
+      halfwave: {
+        label: 'Half-wave plate', build: buildHalfWave,
+        defaults: { angle: 0 },
+        defs: [{ key: 'angle', label: 'Fast axis', type: 'range', min: 0, max: 180, step: 5, unit: '°' }]
+      },
+      quarterwave: {
+        label: 'Quarter-wave plate', build: buildQuarterWave,
+        defaults: { angle: 0 },
+        defs: [{ key: 'angle', label: 'Fast axis', type: 'range', min: 0, max: 180, step: 5, unit: '°' }]
+      },
+      lens: {
+        label: 'Lens', build: buildLens,
+        defaults: { aperture: 0.7, curvature: 2.5, material: 'glass' },
+        defs: [
+          { key: 'aperture', label: 'Aperture', type: 'range', min: 0.25, max: 1.3, step: 0.05 },
+          { key: 'curvature', label: 'Curvature R', type: 'range', min: 1.2, max: 6, step: 0.1 },
+          { key: 'material', label: 'Material', type: 'material' }]
+      },
+      prism: {
+        label: 'Prism', build: buildPrism,
+        defaults: { material: 'flint' },
+        defs: [{ key: 'material', label: 'Material', type: 'material' }]
+      },
+      block: {
+        label: 'Glass block', build: buildBlock,
+        defaults: { size: 1.6, material: 'glass' },
+        defs: [
+          { key: 'size', label: 'Size', type: 'range', min: 0.6, max: 3, step: 0.1 },
+          { key: 'material', label: 'Material', type: 'material' }]
+      },
+      filter: {
+        label: 'Color filter', build: buildFilter,
+        defaults: { color: 'red' },
+        defs: [{
+          key: 'color', label: 'Passes', type: 'select',
+          options: [['red', 'Red'], ['green', 'Green'], ['blue', 'Blue']]
+        }]
+      },
+      screen: {
+        label: 'Screen', build: buildScreen,
+        defaults: { gain: 1.0 },
+        defs: [{ key: 'gain', label: 'Gain', type: 'range', min: 0.1, max: 8, step: 0.1 }]
+      },
+      detector: {
+        label: 'Detector', build: buildDetector,
+        defaults: { gain: 1.0 },
+        defs: [{ key: 'gain', label: 'Gain', type: 'range', min: 0.1, max: 8, step: 0.1 }]
+      }
+    };
 
-    const wls = (sourceState.type === 'white')
-      ? [430, 475, 520, 565, 610, 660]
-      : [parseFloat(sourceState.type)];
+    function addComponent(type, pos, rotY) {
+      const def = COMPONENT_TYPES[type];
+      const comp = {
+        id: nextId++, type, label: def.label,
+        group: new THREE.Group(),
+        params: Object.assign({}, def.defaults),
+        material: MEDIA[def.defaults.material || 'glass'],
+        localSurfaces: [], defs: def.defs || []
+      };
+      if (pos) comp.group.position.copy(pos);
+      if (rotY !== undefined) comp.group.rotation.y = rotY;
+      comp.group.userData.comp = comp;
+      scene.add(comp.group);
+      components.push(comp);
+      def.build(comp);
+      if (type === 'screen' || type === 'detector') createMonitor(comp);
+      return comp;
+    }
 
-    const aperture = Math.max(0.06, sourceState.radius * 0.25);
-    const golden = 2.39996323;
+    function rebuild(comp) {
+      const def = COMPONENT_TYPES[comp.type];
+      comp.material = MEDIA[comp.params.material || 'glass'];
+      def.build(comp);
+      scheduleTrace();
+    }
 
-    for (let i = 0; i < nDir; i++){
-      const u = (i + 0.5) / nDir;
-      const cosT = cosHalf + (1 - cosHalf) * u;
-      const sinT = Math.sqrt(Math.max(0, 1 - cosT*cosT));
-      const phi  = i * golden;
+    /* ============================================================
+       3b.  SIDE MONITOR POPUPS
+       ============================================================ */
+    const monitorsEl = document.getElementById('monitors');
 
-      const lx = sinT * Math.cos(phi);
-      const ly = sinT * Math.sin(phi);
-      const lz = cosT;
+    function createMonitor(comp) {
+      const panel = document.createElement('div');
+      panel.className = 'monitor' + (comp.type === 'detector' ? ' detector-monitor' : '');
+      const header = document.createElement('div');
+      header.className = 'monitor-header';
+      const dot = document.createElement('span'); dot.className = 'monitor-dot';
+      header.appendChild(dot);
+      const title = document.createElement('span');
+      title.className = 'monitor-title';
+      title.textContent = (comp.type === 'detector' ? 'DETECTOR' : 'SCREEN') + ' #' + comp.id;
+      header.appendChild(title);
+      const close = document.createElement('button');
+      close.className = 'monitor-close'; close.textContent = '×';
+      close.title = 'Hide this view';
+      close.addEventListener('click', () => {
+        panel.style.display = 'none';
+        comp.monitorHidden = true;
+        refreshInspector();
+      });
+      header.appendChild(close);
+      panel.appendChild(header);
 
-      const d0 = right.clone().multiplyScalar(lx)
-                  .add(up.clone().multiplyScalar(ly))
-                  .add(dir.clone().multiplyScalar(lz))
-                  .normalize();
+      const cv = document.createElement('canvas');
+      cv.width = SCREEN_RES; cv.height = SCREEN_RES;
+      cv.className = 'monitor-canvas';
+      panel.appendChild(cv);
 
-      const ra = aperture * Math.sqrt(u);
-      const ta = i * 2.39996323;
-      const start = origin.clone()
-        .addScaledVector(right, ra * Math.cos(ta))
-        .addScaledVector(up,    ra * Math.sin(ta))
-        .addScaledVector(dir, 0.45);
+      const ro = document.createElement('div');
+      ro.className = 'monitor-readout';
+      ro.innerHTML =
+        '<div><span>Rays</span><b>0</b></div>' +
+        '<div><span>Pwr</span><b>0.000</b></div>' +
+        '<div><span>Peak</span><b>0.000</b></div>' +
+        '<div><span>Lit</span><b>—</b></div>';
+      panel.appendChild(ro);
 
-      const s0 = arbitraryPerp(d0);
-      const p0 = V().crossVectors(s0, d0).normalize();
+      monitorsEl.appendChild(panel);
+      comp.monitorEl = panel; comp.monitorCanvas = cv;
+      comp.monitorCtx = cv.getContext('2d');
+      comp.monitorReadout = ro; comp.monitorHidden = false;
+      comp.monitorCtx.fillStyle = '#050810';
+      comp.monitorCtx.fillRect(0, 0, SCREEN_RES, SCREEN_RES);
+    }
 
-      for (const wl of wls){
-        const J = J_unpolarized(I * 1.6 / wls.length);
-        rays.push({ o: start.clone(), d: d0.clone(), s: s0.clone(), J, wl,
-                    inside: null, depth: 0, r0: ra });
+    function removeMonitor(comp) {
+      if (comp.monitorEl) {
+        comp.monitorEl.remove();
+        comp.monitorEl = null; comp.monitorCanvas = null;
+        comp.monitorCtx = null; comp.monitorReadout = null;
       }
     }
-    return rays;
-  }
 
-  /* =========================================================
-     OTHER MODES
-     ========================================================= */
-  const N = (lightModel === 'ray') ? 1 : actualRays;
-  const isWhite = sourceState.type === 'white';
-  const wls = [];
-  if (isWhite){
-    const K = 9;
-    for (let i=0;i<K;i++) wls.push(400 + (680-400)*i/(K-1));
-  } else {
-    wls.push(parseFloat(sourceState.type));
-  }
+    /* ============================================================
+       4.  LIGHT SOURCE
+       ============================================================ */
+    const sourceGroup = new THREE.Group();
+    sourceGroup.position.set(0, 2, -5.5);
+    scene.add(sourceGroup);
 
-  const spreadRad = sourceState.spread * Math.PI/180;
+    const srcBody = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.28, 0.85, 24),
+      new THREE.MeshStandardMaterial({ color: 0x2a3a58, metalness: 0.85, roughness: 0.25 }));
+    srcBody.rotation.x = Math.PI / 2; sourceGroup.add(srcBody);
 
-  for (let i=0;i<N;i++){
-    const rr = sourceState.radius * Math.sqrt((i+0.5)/N);
-    const th = i * 2.39996323;
-    const off = right.clone().multiplyScalar(rr*Math.cos(th))
-                 .add(up.clone().multiplyScalar(rr*Math.sin(th)));
+    const srcLens = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.24, 0.24, 0.07, 24),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.4 }));
+    srcLens.rotation.x = Math.PI / 2; srcLens.position.z = 0.43; sourceGroup.add(srcLens);
 
-    for (const wl of wls){
-      let start, d0;
-      if (spreadRad > 0.0001){
-        const t = Math.sqrt((i+0.5)/N);
-        const a = i * 2.39996323;
-        start = origin.clone();
-        d0 = dir.clone()
-              .addScaledVector(right, Math.tan(spreadRad)*t*Math.cos(a))
-              .addScaledVector(up,    Math.tan(spreadRad)*t*Math.sin(a))
+    const aim = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.012, 1.6, 8),
+      new THREE.MeshBasicMaterial({ color: 0x2f4a70, transparent: true, opacity: 0.6 }));
+    aim.rotation.x = Math.PI / 2; aim.position.z = 1.1; sourceGroup.add(aim);
+
+    /* ---- Torch glow sprite ---- */
+    const torchGlowCanvas = document.createElement('canvas');
+    torchGlowCanvas.width = torchGlowCanvas.height = 128;
+    (function () {
+      const gctx = torchGlowCanvas.getContext('2d');
+      const grad = gctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.20, 'rgba(255,244,220,0.85)');
+      grad.addColorStop(0.45, 'rgba(255,225,175,0.35)');
+      grad.addColorStop(0.75, 'rgba(255,200,130,0.09)');
+      grad.addColorStop(1, 'rgba(255,180,100,0)');
+      gctx.fillStyle = grad;
+      gctx.fillRect(0, 0, 128, 128);
+    })();
+    const torchGlowTex = new THREE.CanvasTexture(torchGlowCanvas);
+    torchGlowTex.colorSpace = THREE.SRGBColorSpace;
+    const torchGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: torchGlowTex, blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false, toneMapped: false
+    }));
+    torchGlow.scale.set(1.8, 1.8, 1);
+    torchGlow.position.z = 0.5;
+    torchGlow.visible = false;
+    sourceGroup.add(torchGlow);
+
+    const torchLight = new THREE.PointLight(0xffe9c8, 0, 8, 2);
+    torchLight.position.z = 0.6;
+    sourceGroup.add(torchLight);
+
+    /* ---- Source state ---- */
+    const sourceState = {
+      type: 'white', pol: 'unpol', radius: 0.35, rays: 5, spread: 0, intensity: 1.0,
+      get group() { return sourceGroup; }
+    };
+    sourceGroup.userData.comp = sourceState;
+    sourceState.label = 'Light source';
+    sourceState.defs = []; sourceState.params = {};
+
+    /* ---- Representation state ---- */
+    let lightModel = 'beam';
+    const MODEL_NOTES = {
+      ray: 'Single idealized line — no width, no wave nature. Pure geometric optics.',
+      beam: 'Parallel rays with finite width. Width from beam radius & ray count.',
+      wave: 'Electric field oscillates perpendicular to the path (E-field shown as a sine).',
+      plane: 'Straight ray with perpendicular wavefronts — equal phase fronts across the beam.',
+      spherical: 'Diverging rays from a point source, with curved wavefronts along each ray.',
+      gaussian: 'Brightness-weighted beam — rays near the axis carry more power.',
+      torch: 'Real-world white torch — the light is rendered as a soft volumetric glow. ' +
+        'Beam angle sets the cone. Brightness sets the output power.'
+    };
+
+    function updateSourceVisual() {
+      const isTorch = (lightModel === 'torch');
+      srcBody.visible = true;
+      srcLens.visible = true;
+      aim.visible = !isTorch;
+      torchGlow.visible = isTorch;
+
+      if (isTorch) {
+        const k = sourceState.intensity;
+        srcLens.material.emissiveIntensity = 1.6 + k * 0.6;
+        srcLens.scale.set(1.0 + k * 0.10, 1.0 + k * 0.10, 1.0);
+        torchGlow.scale.setScalar(1.6 + k * 0.55);
+        torchGlow.material.opacity = clamp(0.55 + k * 0.12, 0.4, 1.0);
+        torchLight.intensity = k * 2.4;
+        torchLight.distance = 7 + k * 3;
+      } else {
+        srcLens.material.emissiveIntensity = 1.4;
+        srcLens.scale.set(1, 1, 1);
+        torchLight.intensity = 0;
+      }
+    }
+
+    /* ============================================================
+       5.  SURFACE COLLECTION & INTERSECTION
+       ============================================================ */
+    function collectSurfaces() {
+      scene.updateMatrixWorld(true);
+      const out = [];
+      const invTmp = new THREE.Matrix4();
+      for (const comp of components) {
+        const M = comp.group.matrixWorld;
+        const NM = new THREE.Matrix3().getNormalMatrix(M);
+        invTmp.copy(M).invert();
+        for (const s of comp.localSurfaces) {
+          const ws = { comp, behavior: s.behavior };
+          if (s.kind === 'rect') {
+            ws.kind = 'rect';
+            ws.o = s.o.clone().applyMatrix4(M);
+            ws.e1 = s.e1.clone().applyMatrix3(NM).normalize();
+            ws.e2 = s.e2.clone().applyMatrix3(NM).normalize();
+            ws.n = s.n.clone().applyMatrix3(NM).normalize();
+            ws.h1 = s.h1; ws.h2 = s.h2;
+            if (s.axisLocal) ws.axisWorld = s.axisLocal.clone().applyMatrix3(NM).normalize();
+            if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
+            if (s.retardance !== undefined) ws.retardance = s.retardance;
+            if (s.transmit !== undefined) ws.transmit = s.transmit;
+          } else {
+            ws.kind = 'sphere';
+            ws.c = s.c.clone().applyMatrix4(M);
+            ws.R = s.R;
+            ws.axis = s.axis.clone().applyMatrix3(NM).normalize();
+            ws.aperture = s.aperture;
+            if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
+          }
+          ws.invM = invTmp.clone();
+          out.push(ws);
+        }
+      }
+      return out;
+    }
+
+    function intersectSurf(s, o, d) {
+      if (s.kind === 'rect') {
+        const den = s.n.dot(d);
+        if (Math.abs(den) < 1e-10) return null;
+        const t = s.o.clone().sub(o).dot(s.n) / den;
+        if (t < 1e-5) return null;
+        const p = o.clone().addScaledVector(d, t);
+        const rel = p.clone().sub(s.o);
+        if (Math.abs(rel.dot(s.e1)) > s.h1) return null;
+        if (Math.abs(rel.dot(s.e2)) > s.h2) return null;
+        return t;
+      } else {
+        const oc = o.clone().sub(s.c);
+        const b = oc.dot(d);
+        const c = oc.dot(oc) - s.R * s.R;
+        const disc = b * b - c;
+        if (disc < 0) return null;
+        const sq = Math.sqrt(disc);
+        for (const t of [-b - sq, -b + sq]) {
+          if (t < 1e-5) continue;
+          const p = o.clone().addScaledVector(d, t);
+          const v = p.clone().sub(s.c);
+          const proj = v.dot(s.axis);
+          if (proj <= 0) continue;
+          const rad = v.clone().addScaledVector(s.axis, -proj).length();
+          if (rad > s.aperture) continue;
+          return t;
+        }
+        return null;
+      }
+    }
+
+    function nearestHit(o, d, surfaces) {
+      let bestT = Infinity, bestS = null;
+      for (const s of surfaces) {
+        const t = intersectSurf(s, o, d);
+        if (t !== null && t < bestT) { bestT = t; bestS = s; }
+      }
+      if (!bestS) return null;
+      const p = o.clone().addScaledVector(d, bestT);
+      const n = (bestS.kind === 'rect') ? bestS.n.clone() : p.clone().sub(bestS.c).normalize();
+      return { surf: bestS, t: bestT, p, n };
+    }
+
+    /* ============================================================
+       6.  RAY TRACING
+       ------------------------------------------------------------
+       The raw-segment buffer is now much larger so that very high
+       ray counts can actually be displayed.  Note that the actual
+       ray count is clamped to HARD_RAY_CAP for performance.
+       ============================================================ */
+    const MAX_DEPTH = 22;
+    const MAX_TRACE_SEGS = 500000;    // raw segments held for visualisation
+    const MAX_VIS_SEGS = 3000000;   // line-mode vertex buffer (×6 floats)
+    const MAX_POINTS = 3000000;   // torch point-cloud buffer
+    const MAX_PROC = 3000000;   // max stepRay() calls per trace
+    const MIN_INT = 0.0025;
+
+    /* --- line buffers --- */
+    let segPositions, segColors, segGeo, segLines, segCount = 0;
+
+    (function initSegBuffers() {
+      segPositions = new Float32Array(MAX_VIS_SEGS * 6);
+      segColors = new Float32Array(MAX_VIS_SEGS * 6);
+      segGeo = new THREE.BufferGeometry();
+      segGeo.setAttribute('position', new THREE.BufferAttribute(segPositions, 3));
+      segGeo.setAttribute('color', new THREE.BufferAttribute(segColors, 3));
+      segGeo.setDrawRange(0, 0);
+      const mat = new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.95,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      });
+      segLines = new THREE.LineSegments(segGeo, mat);
+      segLines.frustumCulled = false;
+      scene.add(segLines);
+    })();
+
+    /* --- point cloud buffer (torch mode) --- */
+    let ptPositions, ptColors, ptGeo, ptPoints, ptCount = 0;
+
+    (function initPointBuffers() {
+      ptPositions = new Float32Array(MAX_POINTS * 3);
+      ptColors = new Float32Array(MAX_POINTS * 3);
+      ptGeo = new THREE.BufferGeometry();
+      ptGeo.setAttribute('position', new THREE.BufferAttribute(ptPositions, 3));
+      ptGeo.setAttribute('color', new THREE.BufferAttribute(ptColors, 3));
+      ptGeo.setDrawRange(0, 0);
+
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const ctx = c.getContext('2d');
+      const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0.0, 'rgba(255,255,255,1.0)');
+      g.addColorStop(0.22, 'rgba(255,255,255,0.72)');
+      g.addColorStop(0.55, 'rgba(255,255,255,0.22)');
+      g.addColorStop(1.0, 'rgba(255,255,255,0.0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+
+      const mat = new THREE.PointsMaterial({
+        size: 0.24,
+        map: tex,
+        vertexColors: true,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        sizeAttenuation: true,
+        toneMapped: false,
+      });
+      ptPoints = new THREE.Points(ptGeo, mat);
+      ptPoints.frustumCulled = false;
+      ptPoints.visible = false;
+      scene.add(ptPoints);
+    })();
+
+    let ambientMedium = MEDIA.air;
+
+    const traceSegments = [];
+
+    function collectSegment(a, b, d, s, wl, J, r0) {
+      if (traceSegments.length >= MAX_TRACE_SEGS) return;
+      traceSegments.push({
+        ax: a.x, ay: a.y, az: a.z,
+        bx: b.x, by: b.y, bz: b.z,
+        dx: d.x, dy: d.y, dz: d.z,
+        sx: s.x, sy: s.y, sz: s.z,
+        wl, I: J_intensity(J),
+        r0: r0 || 0
+      });
+    }
+
+    function addLineF(ax, ay, az, bx, by, bz, r, g, b) {
+      if (segCount >= MAX_VIS_SEGS) return;
+      const i6 = segCount * 6;
+      segPositions[i6] = ax; segPositions[i6 + 1] = ay; segPositions[i6 + 2] = az;
+      segPositions[i6 + 3] = bx; segPositions[i6 + 4] = by; segPositions[i6 + 5] = bz;
+      segColors[i6] = r; segColors[i6 + 1] = g; segColors[i6 + 2] = b;
+      segColors[i6 + 3] = r; segColors[i6 + 4] = g; segColors[i6 + 5] = b;
+      segCount++;
+    }
+
+    const SRC_POS = new THREE.Vector3();
+
+    function drawTraceSegment(t, time) {
+      const I = t.I;
+      if (I < 0.003) return;
+
+      let bright = Math.pow(I, 0.75);
+
+      if (lightModel === 'gaussian') {
+        const w = Math.max(0.05, sourceState.radius);
+        const g = Math.exp(-(t.r0 * t.r0) / (w * w));
+        bright *= Math.pow(g, 0.4);
+      }
+
+      const col = wavelengthToRGB(t.wl);
+      const r = col[0] * bright, g = col[1] * bright, b = col[2] * bright;
+      if (r + g + b < 0.005) return;
+
+      const dxs = t.bx - t.ax, dys = t.by - t.ay, dzs = t.bz - t.az;
+      const len = Math.hypot(dxs, dys, dzs);
+      if (len < 1e-6) return;
+
+      if (lightModel === 'ray' || lightModel === 'beam' || lightModel === 'gaussian') {
+        addLineF(t.ax, t.ay, t.az, t.bx, t.by, t.bz, r, g, b);
+        return;
+      }
+
+      const visWl = Math.max(0.20, 0.42 * (t.wl / 550));
+
+      if (lightModel === 'wave') {
+        const amp = Math.min(0.075, visWl * 0.30);
+        const nCycles = len / visWl;
+        const samples = Math.max(3, Math.min(90, Math.ceil(nCycles * 5)));
+        const phase0 = time * 4.0;
+        const kPerLen = (Math.PI * 2) / visWl;
+
+        let prevX = t.ax + t.sx * Math.sin(phase0) * amp;
+        let prevY = t.ay + t.sy * Math.sin(phase0) * amp;
+        let prevZ = t.az + t.sz * Math.sin(phase0) * amp;
+
+        for (let i = 1; i <= samples; i++) {
+          if (segCount >= MAX_VIS_SEGS - 4) return;
+          const tt = i / samples;
+          const off = Math.sin(phase0 + (tt * len) * kPerLen) * amp;
+          const px = t.ax + dxs * tt + t.sx * off;
+          const py = t.ay + dys * tt + t.sy * off;
+          const pz = t.az + dzs * tt + t.sz * off;
+          addLineF(prevX, prevY, prevZ, px, py, pz, r, g, b);
+          prevX = px; prevY = py; prevZ = pz;
+        }
+        return;
+      }
+
+      // plane / spherical
+      addLineF(t.ax, t.ay, t.az, t.bx, t.by, t.bz, r, g, b);
+      const tickHalf = lightModel === 'spherical' ? 0.14 : 0.11;
+      const nTicks = Math.max(0, Math.min(40, Math.floor(len / visWl)));
+      for (let i = 1; i <= nTicks; i++) {
+        if (segCount >= MAX_VIS_SEGS - 4) return;
+        const tt = (i - 0.5) / nTicks;
+        const cx = t.ax + dxs * tt, cy = t.ay + dys * tt, cz = t.az + dzs * tt;
+        addLineF(
+          cx + t.sx * tickHalf, cy + t.sy * tickHalf, cz + t.sz * tickHalf,
+          cx - t.sx * tickHalf, cy - t.sy * tickHalf, cz - t.sz * tickHalf,
+          r, g, b);
+      }
+    }
+
+    function sampleSegmentToPoints(t) {
+      const I = t.I;
+      if (I < 0.004) return;
+
+      const dxs = t.bx - t.ax, dys = t.by - t.ay, dzs = t.bz - t.az;
+      const len = Math.hypot(dxs, dys, dzs);
+      if (len < 0.001) return;
+
+      const col = wavelengthToRGB(t.wl);
+      const baseBright = Math.pow(I, 0.85);
+
+      const spacing = 0.22;
+      const N = Math.min(50, Math.max(3, Math.ceil(len / spacing)));
+
+      for (let i = 0; i <= N; i++) {
+        if (ptCount >= MAX_POINTS - 4) return;
+        const tt = i / N;
+        const x = t.ax + dxs * tt;
+        const y = t.ay + dys * tt;
+        const z = t.az + dzs * tt;
+
+        const dSrc = Math.hypot(x - SRC_POS.x, y - SRC_POS.y, z - SRC_POS.z);
+        const fall = 1.0 / (1.0 + dSrc * dSrc * 0.018);
+
+        const b = baseBright * fall * 0.22;
+        if (b < 0.0035) continue;
+
+        const i3 = ptCount * 3;
+        ptPositions[i3] = x;
+        ptPositions[i3 + 1] = y;
+        ptPositions[i3 + 2] = z;
+        ptColors[i3] = col[0] * b;
+        ptColors[i3 + 1] = col[1] * b;
+        ptColors[i3 + 2] = col[2] * b;
+        ptCount++;
+      }
+    }
+
+    function renderVisuals(time) {
+      segCount = 0;
+      ptCount = 0;
+
+      scene.updateMatrixWorld(true);
+      SRC_POS.setFromMatrixPosition(sourceGroup.matrixWorld);
+
+      if (lightModel === 'torch') {
+        ptPoints.visible = true;
+        for (let k = 0; k < traceSegments.length; k++) {
+          if (ptCount >= MAX_POINTS - 200) break;
+          sampleSegmentToPoints(traceSegments[k]);
+        }
+        ptGeo.attributes.position.needsUpdate = true;
+        ptGeo.attributes.color.needsUpdate = true;
+        ptGeo.setDrawRange(0, ptCount);
+
+        segGeo.setDrawRange(0, 0);
+        document.getElementById('hudSegs').textContent = ptCount.toLocaleString() + ' pts';
+        return;
+      }
+
+      ptPoints.visible = false;
+      const N = traceSegments.length;
+      let stride = 1;
+      if (lightModel === 'wave' && N > 650) stride = Math.ceil(N / 650);
+      else if ((lightModel === 'plane' || lightModel === 'spherical') && N > 1500)
+        stride = Math.ceil(N / 1500);
+
+      for (let k = 0; k < N; k += stride) {
+        if (segCount >= MAX_VIS_SEGS - 200) break;
+        drawTraceSegment(traceSegments[k], time);
+      }
+
+      segGeo.attributes.position.needsUpdate = true;
+      segGeo.attributes.color.needsUpdate = true;
+      segGeo.setDrawRange(0, segCount * 2);
+      document.getElementById('hudSegs').textContent = segCount.toLocaleString();
+    }
+
+    /* ---------- Ray-tracing step ---------- */
+    function stepRay(ray, surfaces, queue) {
+      if (ray.depth > MAX_DEPTH) return;
+
+      const hit = nearestHit(ray.o, ray.d, surfaces);
+      const end = hit ? hit.p : ray.o.clone().addScaledVector(ray.d, 400);
+      collectSegment(ray.o, end, ray.d, ray.s, ray.wl, ray.J, ray.r0);
+      if (!hit) return;
+
+      const surf = hit.surf;
+      const d = ray.d;
+      let n = hit.n.clone();
+      let cosi = -d.dot(n);
+      if (cosi < 0) { n.negate(); cosi = -cosi; }
+      cosi = clamp(cosi, 0, 1);
+
+      let sNew = V().crossVectors(d, n);
+      if (sNew.lengthSq() < 1e-14) sNew = arbitraryPerp(d);
+      sNew.normalize();
+
+      let J = ray.J;
+      if (ray.s) {
+        const pOld = V().crossVectors(ray.s, d);
+        const alpha = sNew.dot(ray.s);
+        const beta = sNew.dot(pOld);
+        const phi = Math.atan2(beta, alpha);
+        if (Math.abs(phi) > 1e-9) J = J_rotate(J, phi);
+      }
+      if (J_intensity(J) < MIN_INT) return;
+
+      const p = hit.p;
+      const eps = 4e-4;
+      const depth = ray.depth + 1;
+      const wl = ray.wl;
+      const reflectDir = d.clone().addScaledVector(n, -2 * d.dot(n)).normalize();
+
+      switch (surf.behavior) {
+        case 'mirror': {
+          const k = Math.sqrt(surf.reflectivity ?? 0.95);
+          queue.push({
+            o: p.clone().addScaledVector(reflectDir, eps), d: reflectDir, s: sNew,
+            J: J_scale(J, k, k), wl, inside: ray.inside, depth, r0: ray.r0
+          });
+          break;
+        }
+        case 'split': {
+          const R = surf.reflectivity ?? 0.5;
+          if (R > 0.001) {
+            const k = Math.sqrt(R);
+            queue.push({
+              o: p.clone().addScaledVector(reflectDir, eps), d: reflectDir, s: sNew,
+              J: J_scale(J, k, k), wl, inside: ray.inside, depth, r0: ray.r0
+            });
+          }
+          if (R < 0.999) {
+            const k = Math.sqrt(1 - R);
+            queue.push({
+              o: p.clone().addScaledVector(d, eps), d: d.clone(), s: sNew,
+              J: J_scale(J, k, k), wl, inside: ray.inside, depth, r0: ray.r0
+            });
+          }
+          break;
+        }
+        case 'polarizer': {
+          const axis = surf.axisWorld.clone();
+          axis.addScaledVector(d, -axis.dot(d));
+          if (axis.lengthSq() < 1e-12) break;
+          axis.normalize();
+          const pv = V().crossVectors(sNew, d).normalize();
+          const th = Math.atan2(axis.dot(pv), axis.dot(sNew));
+          const c = Math.cos(th), s = Math.sin(th);
+          const U = [[[c * c, 0], [c * s, 0]], [[c * s, 0], [s * s, 0]]];
+          const J2 = J_apply(J, U);
+          if (J_intensity(J2) < MIN_INT) break;
+          queue.push({
+            o: p.clone().addScaledVector(d, eps), d: d.clone(), s: sNew,
+            J: J2, wl, inside: ray.inside, depth, r0: ray.r0
+          });
+          break;
+        }
+        case 'waveplate': {
+          const axis = surf.axisWorld.clone();
+          axis.addScaledVector(d, -axis.dot(d));
+          if (axis.lengthSq() < 1e-12) break;
+          axis.normalize();
+          const pv = V().crossVectors(sNew, d).normalize();
+          const th = Math.atan2(axis.dot(pv), axis.dot(sNew));
+          const c = Math.cos(th), s = Math.sin(th);
+          const delta = surf.retardance;
+          const cd = Math.cos(delta), sd = Math.sin(delta);
+          const U = [
+            [[c * c + s * s * cd, s * s * sd], [c * s * (1 - cd), -c * s * sd]],
+            [[c * s * (1 - cd), -c * s * sd], [s * s + c * c * cd, c * c * sd]]
+          ];
+          const J2 = J_apply(J, U);
+          if (J_intensity(J2) < MIN_INT) break;
+          queue.push({
+            o: p.clone().addScaledVector(d, eps), d: d.clone(), s: sNew,
+            J: J2, wl, inside: ray.inside, depth, r0: ray.r0
+          });
+          break;
+        }
+        case 'filter': {
+          const T = surf.transmit(wl);
+          if (T <= 0.002) break;
+          const k = Math.sqrt(T);
+          queue.push({
+            o: p.clone().addScaledVector(d, eps), d: d.clone(), s: sNew,
+            J: J_scale(J, k, k), wl, inside: ray.inside, depth, r0: ray.r0
+          });
+          break;
+        }
+        case 'screen':
+        case 'detector': {
+          const comp = surf.comp;
+          if (comp && comp.accum && surf.invM) {
+            const local = p.clone().applyMatrix4(surf.invM);
+            const u = local.x, v = local.y;
+            const N = comp.accumSize;
+            const px = Math.floor((u / surf.h1 * 0.5 + 0.5) * N);
+            const py = Math.floor((0.5 - v / surf.h2 * 0.5) * N);
+            if (px >= 0 && px < N && py >= 0 && py < N) {
+              const I = J_intensity(J);
+              splatAccum(comp, px, py, wavelengthToRGB(wl), I);
+              comp.hitCount++;
+              comp.totalPower += I;
+            }
+          }
+          break;
+        }
+        case 'dielectric': {
+          const n1 = ray.inside ? nOf(ray.inside.material, wl) : nOf(ambientMedium, wl);
+          const n2 = (ray.inside === surf.comp) ? nOf(ambientMedium, wl) : nOf(surf.comp.material, wl);
+          const eta = n1 / n2;
+          const sin2t = eta * eta * (1 - cosi * cosi);
+          if (sin2t >= 1.0) {
+            queue.push({
+              o: p.clone().addScaledVector(reflectDir, eps), d: reflectDir, s: sNew,
+              J: J, wl, inside: ray.inside, depth, r0: ray.r0
+            });
+            break;
+          }
+          const cost = Math.sqrt(1 - sin2t);
+          const rs = (n1 * cosi - n2 * cost) / (n1 * cosi + n2 * cost);
+          const rp = (n2 * cosi - n1 * cost) / (n2 * cosi + n1 * cost);
+          const ts0 = 2 * n1 * cosi / (n1 * cosi + n2 * cost);
+          const tp0 = 2 * n1 * cosi / (n2 * cosi + n1 * cost);
+          const fac = Math.sqrt(Math.max(0, (n2 * cost) / (n1 * cosi)));
+          const ts = ts0 * fac, tp = tp0 * fac;
+          const Jr = J_scale(J, rs, rp);
+          const Jt = J_scale(J, ts, tp);
+          const I0 = J_intensity(J);
+          if (J_intensity(Jr) > MIN_INT && J_intensity(Jr) > 0.004 * I0) {
+            queue.push({
+              o: p.clone().addScaledVector(reflectDir, eps), d: reflectDir, s: sNew,
+              J: Jr, wl, inside: ray.inside, depth, r0: ray.r0
+            });
+          }
+          if (J_intensity(Jt) > MIN_INT) {
+            const dt = d.clone().multiplyScalar(eta).addScaledVector(n, eta * cosi - cost).normalize();
+            const newInside = (ray.inside === surf.comp) ? null : surf.comp;
+            queue.push({
+              o: p.clone().addScaledVector(dt, eps), d: dt, s: sNew,
+              J: Jt, wl, inside: newInside, depth, r0: ray.r0
+            });
+          }
+          break;
+        }
+      }
+    }
+
+    /* ---------- generate initial rays ---------- */
+    function makeInitialRays() {
+      const rays = [];
+      const M = sourceGroup.matrixWorld;
+      const origin = new THREE.Vector3().setFromMatrixPosition(M);
+      const q = sourceGroup.quaternion;
+      const dir = V(0, 0, 1).applyQuaternion(q).normalize();
+      const right = V(1, 0, 0).applyQuaternion(q).normalize();
+      const up = V(0, 1, 0).applyQuaternion(q).normalize();
+
+      const I = sourceState.intensity;
+      // Clamp requested ray count to what we can actually handle in one pass
+      const requestedRays = sourceState.rays;
+      const actualRays = Math.min(requestedRays, HARD_RAY_CAP);
+
+      /* =========================================================
+         TORCH MODE
+         ========================================================= */
+      if (lightModel === 'torch') {
+        const nDir = Math.max(24, actualRays);
+        const halfAngle = Math.max(sourceState.spread, 6) * Math.PI / 180;
+        const cosHalf = Math.cos(halfAngle);
+
+        const wls = (sourceState.type === 'white')
+          ? [430, 475, 520, 565, 610, 660]
+          : [parseFloat(sourceState.type)];
+
+        const aperture = Math.max(0.06, sourceState.radius * 0.25);
+        const golden = 2.39996323;
+
+        for (let i = 0; i < nDir; i++) {
+          const u = (i + 0.5) / nDir;
+          const cosT = cosHalf + (1 - cosHalf) * u;
+          const sinT = Math.sqrt(Math.max(0, 1 - cosT * cosT));
+          const phi = i * golden;
+
+          const lx = sinT * Math.cos(phi);
+          const ly = sinT * Math.sin(phi);
+          const lz = cosT;
+
+          const d0 = right.clone().multiplyScalar(lx)
+            .add(up.clone().multiplyScalar(ly))
+            .add(dir.clone().multiplyScalar(lz))
+            .normalize();
+
+          const ra = aperture * Math.sqrt(u);
+          const ta = i * 2.39996323;
+          const start = origin.clone()
+            .addScaledVector(right, ra * Math.cos(ta))
+            .addScaledVector(up, ra * Math.sin(ta))
+            .addScaledVector(dir, 0.45);
+
+          const s0 = arbitraryPerp(d0);
+          const p0 = V().crossVectors(s0, d0).normalize();
+
+          for (const wl of wls) {
+            const J = J_unpolarized(I * 1.6 / wls.length);
+            rays.push({
+              o: start.clone(), d: d0.clone(), s: s0.clone(), J, wl,
+              inside: null, depth: 0, r0: ra
+            });
+          }
+        }
+        return rays;
+      }
+
+      /* =========================================================
+         OTHER MODES
+         ========================================================= */
+      const N = (lightModel === 'ray') ? 1 : actualRays;
+      const isWhite = sourceState.type === 'white';
+      const wls = [];
+      if (isWhite) {
+        const K = 9;
+        for (let i = 0; i < K; i++) wls.push(400 + (680 - 400) * i / (K - 1));
+      } else {
+        wls.push(parseFloat(sourceState.type));
+      }
+
+      const spreadRad = sourceState.spread * Math.PI / 180;
+
+      for (let i = 0; i < N; i++) {
+        const rr = sourceState.radius * Math.sqrt((i + 0.5) / N);
+        const th = i * 2.39996323;
+        const off = right.clone().multiplyScalar(rr * Math.cos(th))
+          .add(up.clone().multiplyScalar(rr * Math.sin(th)));
+
+        for (const wl of wls) {
+          let start, d0;
+          if (spreadRad > 0.0001) {
+            const t = Math.sqrt((i + 0.5) / N);
+            const a = i * 2.39996323;
+            start = origin.clone();
+            d0 = dir.clone()
+              .addScaledVector(right, Math.tan(spreadRad) * t * Math.cos(a))
+              .addScaledVector(up, Math.tan(spreadRad) * t * Math.sin(a))
               .normalize();
-      } else {
-        start = origin.clone().add(off);
-        d0 = dir.clone();
+          } else {
+            start = origin.clone().add(off);
+            d0 = dir.clone();
+          }
+          const s0 = arbitraryPerp(d0);
+          const p0 = V().crossVectors(s0, d0).normalize();
+          let J;
+          if (sourceState.pol === 'lin') {
+            const ex = up.dot(s0), ey = up.dot(p0);
+            J = J_linear(I, ex, ey);
+          } else {
+            J = J_unpolarized(I);
+          }
+          rays.push({ o: start, d: d0, s: s0, J, wl, inside: null, depth: 0, r0: rr });
+        }
       }
-      const s0 = arbitraryPerp(d0);
-      const p0 = V().crossVectors(s0, d0).normalize();
-      let J;
-      if (sourceState.pol === 'lin'){
-        const ex = up.dot(s0), ey = up.dot(p0);
-        J = J_linear(I, ex, ey);
-      } else {
-        J = J_unpolarized(I);
-      }
-      rays.push({ o:start, d:d0, s:s0, J, wl, inside:null, depth:0, r0: rr });
+      return rays;
     }
-  }
-  return rays;
-}
 
-/* ---------- screen splat / flush ---------- */
-function splatAccum(comp, px, py, col, intensity){
-  const N = comp.accumSize;
-  const gain = comp.params.gain !== undefined ? comp.params.gain : 1;
-  const weight = intensity * gain;
-  const R = 4, R2 = R*R;
-  for (let dy=-R; dy<=R; dy++) for (let dx=-R; dx<=R; dx++){
-    const d2 = dx*dx + dy*dy;
-    if (d2 > R2) continue;
-    const nx = px+dx, ny = py+dy;
-    if (nx<0 || nx>=N || ny<0 || ny>=N) continue;
-    const g = Math.exp(-d2 / (R2*0.5)) * 0.22;
-    const j = (ny*N+nx)*3;
-    comp.accum[j  ] += col[0] * weight * g;
-    comp.accum[j+1] += col[1] * weight * g;
-    comp.accum[j+2] += col[2] * weight * g;
-  }
-}
-
-function flushScreen(comp){
-  const N = comp.accumSize;
-  const ctx = comp.screenCtx;
-  const img = ctx.createImageData(N, N);
-  const data = img.data;
-  const isDet = comp.type === 'detector';
-  let peak = 0, lit = 0;
-
-  for (let y=0;y<N;y++) for (let x=0;x<N;x++){
-    let r=5, g=8, b=16;
-    if (isDet && (x % 32 === 0 || y % 32 === 0)){ r = 14; g = 24; b = 48; }
-    const i = y*N + x;
-    const ar = comp.accum[i*3], ag = comp.accum[i*3+1], ab = comp.accum[i*3+2];
-    const mx = Math.max(ar, ag, ab);
-    if (mx > peak) peak = mx;
-    if (mx > 0.001){
-      lit++;
-      const rr = ar/(1 + ar*0.85), gg = ag/(1 + ag*0.85), bb = ab/(1 + ab*0.85);
-      r = Math.min(255, r + rr*255);
-      g = Math.min(255, g + gg*255);
-      b = Math.min(255, b + bb*255);
-    }
-    const k = i*4;
-    data[k] = r; data[k+1] = g; data[k+2] = b; data[k+3] = 255;
-  }
-  ctx.putImageData(img, 0, 0);
-  comp.screenTex.needsUpdate = true;
-  comp.peak = peak;
-  comp.illuminatedPixels = lit;
-
-  if (comp.monitorCtx && comp.monitorCanvas){
-    comp.monitorCtx.clearRect(0, 0, comp.monitorCanvas.width, comp.monitorCanvas.height);
-    comp.monitorCtx.drawImage(comp.screenCanvas, 0, 0);
-    if (comp.monitorReadout){
-      const area = lit > 0 ? (lit / (N*N) * 100).toFixed(1) + '%' : '—';
-      comp.monitorReadout.innerHTML =
-        `<div><span>Rays</span><b>${comp.hitCount}</b></div>` +
-        `<div><span>Pwr</span><b>${comp.totalPower.toFixed(3)}</b></div>` +
-        `<div><span>Peak</span><b>${peak.toFixed(3)}</b></div>` +
-        `<div><span>Lit</span><b>${area}</b></div>`;
-    }
-  }
-}
-
-/* ---------- main trace ---------- */
-function doTrace(){
-  traceSegments.length = 0;
-
-  for (const c of components){
-    if (c.accum){
-      c.accum.fill(0);
-      c.hitCount = 0; c.totalPower = 0; c.peak = 0; c.illuminatedPixels = 0;
-    }
-  }
-
-  const surfaces = collectSurfaces();
-  const queue = makeInitialRays();
-
-  let processed = 0;
-
-  while (queue.length > 0 && processed < MAX_PROC && traceSegments.length < MAX_TRACE_SEGS){
-    const ray = queue.pop();
-    processed++;
-    stepRay(ray, surfaces, queue);
-  }
-
-  renderVisuals(performance.now() * 0.001);
-  for (const c of components) if (c.accum && c.screenTex) flushScreen(c);
-  updateReadout();
-}
-
-let traceScheduled = false;
-function scheduleTrace(){
-  if (traceScheduled) return;
-  traceScheduled = true;
-  requestAnimationFrame(()=>{ traceScheduled = false; doTrace(); });
-}
-
-/* ============================================================
-   7.  UI
-   ============================================================ */
-const inspector = document.getElementById('inspector');
-let readoutEl = null;
-
-function el(tag, cls, txt){
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (txt !== undefined) e.textContent = txt;
-  return e;
-}
-
-function makeSliderRow(label, min, max, step, value, unit, onInput){
-  const row = el('div','row');
-  row.appendChild(el('label', null, label));
-  const inp = document.createElement('input');
-  inp.type='range'; inp.min=min; inp.max=max; inp.step=step; inp.value=value;
-  const val = el('span','val', (unit==='°'? value+'°' : (unit==='×'? (+value).toFixed(1)+'×' : (+value).toFixed(step<1?2:0))));
-  inp.addEventListener('input', ()=>{
-    const v = parseFloat(inp.value);
-    val.textContent = (unit==='°'? v+'°' : (unit==='×'? v.toFixed(1)+'×' : (step<1? v.toFixed(2): v)));
-    onInput(v);
-  });
-  row.appendChild(inp); row.appendChild(val);
-  return row;
-}
-
-function makeSelectRow(label, options, value, onChange){
-  const row = el('div','row');
-  row.appendChild(el('label', null, label));
-  const sel = document.createElement('select');
-  for (const [v,l] of options){
-    const o = document.createElement('option');
-    o.value = v; o.textContent = l; if (v===value) o.selected = true;
-    sel.appendChild(o);
-  }
-  sel.addEventListener('change', ()=> onChange(sel.value));
-  row.appendChild(sel);
-  return row;
-}
-
-function updateReadout(){
-  if (!readoutEl || !selected || !selected.accum) return;
-  const c = selected;
-  const total = c.totalPower || 0, peak = c.peak || 0;
-  const hits = c.hitCount || 0, lit = c.illuminatedPixels || 0;
-  const area = lit > 0 ? (lit / (SCREEN_RES*SCREEN_RES) * 100).toFixed(1) + '%' : '—';
-  const kind = c.type === 'detector' ? 'DETECTOR' : 'SCREEN';
-  readoutEl.innerHTML =
-    `<div style="color:#6cd8ff;font-size:10px;letter-spacing:1.5px;margin-bottom:4px">${kind} READOUT</div>` +
-    `<div><span class="k">Rays absorbed : </span><span class="v">${hits}</span></div>` +
-    `<div><span class="k">Total power   : </span><span class="v">${total.toFixed(4)}</span></div>` +
-    `<div><span class="k">Peak intensity: </span><span class="v">${peak.toFixed(3)}</span></div>` +
-    `<div><span class="k">Lit area      : </span><span class="v">${area}</span></div>`;
-}
-
-function refreshInspector(){
-  inspector.innerHTML = '';
-  readoutEl = null;
-
-  if (!selected){
-    inspector.innerHTML = '<div class="hint">Click an object in the scene to edit it. Drag to move. Shift+drag to raise/lower. Delete key removes it.</div>';
-    return;
-  }
-
-  const c = selected;
-  inspector.appendChild(el('div','pill', c.label || 'Object'));
-
-  if (c === sourceState){
-    const hint = el('div','bulb-hint');
-    if (lightModel === 'torch'){
-      hint.innerHTML = '🔦 <b>Real-world torch</b> — rendered as a soft volumetric glow. ' +
-                       'Use <b>Brightness</b> to change output, <b>Beam angle</b> to widen the cone, ' +
-                       'and <b>Ray count</b> for sampling density.';
-    } else {
-      hint.innerHTML = 'Ray count is on a <b>log scale</b>: the slider maps 1 → 100,000,000 rays. ' +
-                       'Very large values are clamped internally to keep the simulation responsive.';
-    }
-    inspector.appendChild(hint);
-  }
-
-  if (c.defs && c.defs.length){
-    for (const d of c.defs){
-      const cur = c.params[d.key];
-      if (d.type === 'range'){
-        inspector.appendChild(makeSliderRow(d.label, d.min, d.max, d.step, cur, d.unit, v=>{
-          c.params[d.key] = v; rebuild(c);
-        }));
-      } else if (d.type === 'select'){
-        inspector.appendChild(makeSelectRow(d.label, d.options, cur, v=>{
-          c.params[d.key] = v; rebuild(c);
-        }));
-      } else if (d.type === 'material'){
-        const opts = Object.keys(MEDIA).map(k=>[k, MEDIA[k].label]);
-        inspector.appendChild(makeSelectRow(d.label, opts, cur, v=>{
-          c.params[d.key] = v; c.material = MEDIA[v]; rebuild(c);
-        }));
+    /* ---------- screen splat / flush ---------- */
+    function splatAccum(comp, px, py, col, intensity) {
+      const N = comp.accumSize;
+      const gain = comp.params.gain !== undefined ? comp.params.gain : 1;
+      const weight = intensity * gain;
+      const R = 4, R2 = R * R;
+      for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 > R2) continue;
+        const nx = px + dx, ny = py + dy;
+        if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+        const g = Math.exp(-d2 / (R2 * 0.5)) * 0.22;
+        const j = (ny * N + nx) * 3;
+        comp.accum[j] += col[0] * weight * g;
+        comp.accum[j + 1] += col[1] * weight * g;
+        comp.accum[j + 2] += col[2] * weight * g;
       }
     }
-  }
 
-  if (c.accum){
-    readoutEl = el('div','readout');
-    inspector.appendChild(readoutEl);
-    updateReadout();
-  }
+    function flushScreen(comp) {
+      const N = comp.accumSize;
+      const ctx = comp.screenCtx;
+      const img = ctx.createImageData(N, N);
+      const data = img.data;
+      const isDet = comp.type === 'detector';
+      let peak = 0, lit = 0;
 
-  if (c.monitorEl && c.monitorHidden){
-    const show = el('button', null, 'Show monitor view');
-    show.style.width = '100%'; show.style.marginTop = '8px';
-    show.addEventListener('click', ()=>{
-      c.monitorEl.style.display = '';
-      c.monitorHidden = false;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        let r = 5, g = 8, b = 16;
+        if (isDet && (x % 32 === 0 || y % 32 === 0)) { r = 14; g = 24; b = 48; }
+        const i = y * N + x;
+        const ar = comp.accum[i * 3], ag = comp.accum[i * 3 + 1], ab = comp.accum[i * 3 + 2];
+        const mx = Math.max(ar, ag, ab);
+        if (mx > peak) peak = mx;
+        if (mx > 0.001) {
+          lit++;
+          const rr = ar / (1 + ar * 0.85), gg = ag / (1 + ag * 0.85), bb = ab / (1 + ab * 0.85);
+          r = Math.min(255, r + rr * 255);
+          g = Math.min(255, g + gg * 255);
+          b = Math.min(255, b + bb * 255);
+        }
+        const k = i * 4;
+        data[k] = r; data[k + 1] = g; data[k + 2] = b; data[k + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      comp.screenTex.needsUpdate = true;
+      comp.peak = peak;
+      comp.illuminatedPixels = lit;
+
+      if (comp.monitorCtx && comp.monitorCanvas) {
+        comp.monitorCtx.clearRect(0, 0, comp.monitorCanvas.width, comp.monitorCanvas.height);
+        comp.monitorCtx.drawImage(comp.screenCanvas, 0, 0);
+        if (comp.monitorReadout) {
+          const area = lit > 0 ? (lit / (N * N) * 100).toFixed(1) + '%' : '—';
+          comp.monitorReadout.innerHTML =
+            `<div><span>Rays</span><b>${comp.hitCount}</b></div>` +
+            `<div><span>Pwr</span><b>${comp.totalPower.toFixed(3)}</b></div>` +
+            `<div><span>Peak</span><b>${peak.toFixed(3)}</b></div>` +
+            `<div><span>Lit</span><b>${area}</b></div>`;
+        }
+      }
+    }
+
+    /* ---------- main trace ---------- */
+    function doTrace() {
+      traceSegments.length = 0;
+
+      for (const c of components) {
+        if (c.accum) {
+          c.accum.fill(0);
+          c.hitCount = 0; c.totalPower = 0; c.peak = 0; c.illuminatedPixels = 0;
+        }
+      }
+
+      const surfaces = collectSurfaces();
+      const queue = makeInitialRays();
+
+      let processed = 0;
+
+      while (queue.length > 0 && processed < MAX_PROC && traceSegments.length < MAX_TRACE_SEGS) {
+        const ray = queue.pop();
+        processed++;
+        stepRay(ray, surfaces, queue);
+      }
+
+      renderVisuals(performance.now() * 0.001);
+      for (const c of components) if (c.accum && c.screenTex) flushScreen(c);
+      updateReadout();
+    }
+
+    let traceScheduled = false;
+    function scheduleTrace() {
+      if (traceScheduled) return;
+      traceScheduled = true;
+      requestAnimationFrame(() => { traceScheduled = false; doTrace(); });
+    }
+
+    /* ============================================================
+       7.  UI
+       ============================================================ */
+    const inspector = document.getElementById('inspector');
+    let readoutEl = null;
+
+    function el(tag, cls, txt) {
+      const e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (txt !== undefined) e.textContent = txt;
+      return e;
+    }
+
+    function makeSliderRow(label, min, max, step, value, unit, onInput) {
+      const row = el('div', 'row');
+      row.appendChild(el('label', null, label));
+      const inp = document.createElement('input');
+      inp.type = 'range'; inp.min = min; inp.max = max; inp.step = step; inp.value = value;
+      const val = el('span', 'val', (unit === '°' ? value + '°' : (unit === '×' ? (+value).toFixed(1) + '×' : (+value).toFixed(step < 1 ? 2 : 0))));
+      inp.addEventListener('input', () => {
+        const v = parseFloat(inp.value);
+        val.textContent = (unit === '°' ? v + '°' : (unit === '×' ? v.toFixed(1) + '×' : (step < 1 ? v.toFixed(2) : v)));
+        onInput(v);
+      });
+      row.appendChild(inp); row.appendChild(val);
+      return row;
+    }
+
+    function makeSelectRow(label, options, value, onChange) {
+      const row = el('div', 'row');
+      row.appendChild(el('label', null, label));
+      const sel = document.createElement('select');
+      for (const [v, l] of options) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = l; if (v === value) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.addEventListener('change', () => onChange(sel.value));
+      row.appendChild(sel);
+      return row;
+    }
+
+    function updateReadout() {
+      if (!readoutEl || !selected || !selected.accum) return;
+      const c = selected;
+      const total = c.totalPower || 0, peak = c.peak || 0;
+      const hits = c.hitCount || 0, lit = c.illuminatedPixels || 0;
+      const area = lit > 0 ? (lit / (SCREEN_RES * SCREEN_RES) * 100).toFixed(1) + '%' : '—';
+      const kind = c.type === 'detector' ? 'DETECTOR' : 'SCREEN';
+      readoutEl.innerHTML =
+        `<div style="color:#6cd8ff;font-size:10px;letter-spacing:1.5px;margin-bottom:4px">${kind} READOUT</div>` +
+        `<div><span class="k">Rays absorbed : </span><span class="v">${hits}</span></div>` +
+        `<div><span class="k">Total power   : </span><span class="v">${total.toFixed(4)}</span></div>` +
+        `<div><span class="k">Peak intensity: </span><span class="v">${peak.toFixed(3)}</span></div>` +
+        `<div><span class="k">Lit area      : </span><span class="v">${area}</span></div>`;
+    }
+
+    function refreshInspector() {
+      inspector.innerHTML = '';
+      readoutEl = null;
+
+      if (!selected) {
+        inspector.innerHTML = '<div class="hint">Click an object in the scene to edit it. Drag to move. Shift+drag to raise/lower. Delete key removes it.</div>';
+        return;
+      }
+
+      const c = selected;
+      inspector.appendChild(el('div', 'pill', c.label || 'Object'));
+
+      if (c === sourceState) {
+        const hint = el('div', 'bulb-hint');
+        if (lightModel === 'torch') {
+          hint.innerHTML = '🔦 <b>Real-world torch</b> — rendered as a soft volumetric glow. ' +
+            'Use <b>Brightness</b> to change output, <b>Beam angle</b> to widen the cone, ' +
+            'and <b>Ray count</b> for sampling density.';
+        } else {
+          hint.innerHTML = 'Ray count is on a <b>log scale</b>: the slider maps 1 → 100,000,000 rays. ' +
+            'Very large values are clamped internally to keep the simulation responsive.';
+        }
+        inspector.appendChild(hint);
+      }
+
+      if (c.defs && c.defs.length) {
+        for (const d of c.defs) {
+          const cur = c.params[d.key];
+          if (d.type === 'range') {
+            inspector.appendChild(makeSliderRow(d.label, d.min, d.max, d.step, cur, d.unit, v => {
+              c.params[d.key] = v; rebuild(c);
+            }));
+          } else if (d.type === 'select') {
+            inspector.appendChild(makeSelectRow(d.label, d.options, cur, v => {
+              c.params[d.key] = v; rebuild(c);
+            }));
+          } else if (d.type === 'material') {
+            const opts = Object.keys(MEDIA).map(k => [k, MEDIA[k].label]);
+            inspector.appendChild(makeSelectRow(d.label, opts, cur, v => {
+              c.params[d.key] = v; c.material = MEDIA[v]; rebuild(c);
+            }));
+          }
+        }
+      }
+
+      if (c.accum) {
+        readoutEl = el('div', 'readout');
+        inspector.appendChild(readoutEl);
+        updateReadout();
+      }
+
+      if (c.monitorEl && c.monitorHidden) {
+        const show = el('button', null, 'Show monitor view');
+        show.style.width = '100%'; show.style.marginTop = '8px';
+        show.addEventListener('click', () => {
+          c.monitorEl.style.display = '';
+          c.monitorHidden = false;
+          refreshInspector();
+        });
+        inspector.appendChild(show);
+      }
+
+      inspector.appendChild(el('hr'));
+
+      const g = c.group;
+      inspector.appendChild(makeSliderRow('X', -10, 10, 0.1, g.position.x, '', v => {
+        g.position.x = v; scheduleTrace();
+      }));
+      inspector.appendChild(makeSliderRow('Y', 0.2, 8, 0.1, g.position.y, '', v => {
+        g.position.y = v; scheduleTrace();
+      }));
+      inspector.appendChild(makeSliderRow('Z', -10, 10, 0.1, g.position.z, '', v => {
+        g.position.z = v; scheduleTrace();
+      }));
+      inspector.appendChild(makeSliderRow('Yaw', -180, 180, 1, THREE.MathUtils.radToDeg(g.rotation.y), '°', v => {
+        g.rotation.y = THREE.MathUtils.degToRad(v); scheduleTrace();
+      }));
+      inspector.appendChild(makeSliderRow('Pitch', -90, 90, 1, THREE.MathUtils.radToDeg(g.rotation.x), '°', v => {
+        g.rotation.x = THREE.MathUtils.degToRad(v); scheduleTrace();
+      }));
+
+      if (c !== sourceState) {
+        inspector.appendChild(el('hr'));
+        const del = el('button', 'danger', 'Delete component');
+        del.style.width = '100%';
+        del.addEventListener('click', () => {
+          removeMonitor(c);
+          scene.remove(g);
+          const i = components.indexOf(c);
+          if (i >= 0) components.splice(i, 1);
+          selected = null;
+          refreshInspector();
+          scheduleTrace();
+        });
+        inspector.appendChild(del);
+      }
+    }
+
+    function select(obj) {
+      selected = obj;
+      if (obj && obj.monitorEl && obj.monitorHidden) {
+        obj.monitorEl.style.display = '';
+        obj.monitorHidden = false;
+      }
       refreshInspector();
+    }
+
+    /* ---- Add buttons ---- */
+    document.querySelectorAll('[data-add]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.add;
+        const off = (components.length % 5) * 0.4 - 0.8;
+        const comp = addComponent(type, V(off, 2, 0), 0);
+        select(comp);
+        scheduleTrace();
+      });
     });
-    inspector.appendChild(show);
-  }
 
-  inspector.appendChild(el('hr'));
+    /* ---- Source controls ---- */
+    const $ = id => document.getElementById(id);
 
-  const g = c.group;
-  inspector.appendChild(makeSliderRow('X', -10, 10, 0.1, g.position.x, '', v=>{
-    g.position.x = v; scheduleTrace(); }));
-  inspector.appendChild(makeSliderRow('Y', 0.2, 8, 0.1, g.position.y, '', v=>{
-    g.position.y = v; scheduleTrace(); }));
-  inspector.appendChild(makeSliderRow('Z', -10, 10, 0.1, g.position.z, '', v=>{
-    g.position.z = v; scheduleTrace(); }));
-  inspector.appendChild(makeSliderRow('Yaw', -180, 180, 1, THREE.MathUtils.radToDeg(g.rotation.y), '°', v=>{
-    g.rotation.y = THREE.MathUtils.degToRad(v); scheduleTrace(); }));
-  inspector.appendChild(makeSliderRow('Pitch', -90, 90, 1, THREE.MathUtils.radToDeg(g.rotation.x), '°', v=>{
-    g.rotation.x = THREE.MathUtils.degToRad(v); scheduleTrace(); }));
+    $('lightModel').addEventListener('change', e => {
+      lightModel = e.target.value;
+      $('modelNote').textContent = MODEL_NOTES[lightModel] || '';
 
-  if (c !== sourceState){
-    inspector.appendChild(el('hr'));
-    const del = el('button','danger','Delete component');
-    del.style.width = '100%';
-    del.addEventListener('click', ()=>{
-      removeMonitor(c);
-      scene.remove(g);
-      const i = components.indexOf(c);
-      if (i >= 0) components.splice(i,1);
-      selected = null;
-      refreshInspector();
+      if (lightModel === 'torch' && sourceState.spread === 0) {
+        sourceState.spread = 14;
+        $('srcSpread').value = 14;
+        $('vSpread').textContent = '14°';
+      }
+
+      updateSourceVisual();
+      if (selected === sourceState) refreshInspector();
+      renderVisuals(performance.now() * 0.001);
       scheduleTrace();
     });
-    inspector.appendChild(del);
-  }
-}
 
-function select(obj){
-  selected = obj;
-  if (obj && obj.monitorEl && obj.monitorHidden){
-    obj.monitorEl.style.display = '';
-    obj.monitorHidden = false;
-  }
-  refreshInspector();
-}
+    $('srcType').addEventListener('change', e => { sourceState.type = e.target.value; scheduleTrace(); });
+    $('srcPol').addEventListener('change', e => { sourceState.pol = e.target.value; scheduleTrace(); });
 
-/* ---- Add buttons ---- */
-document.querySelectorAll('[data-add]').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    const type = btn.dataset.add;
-    const off = (components.length % 5) * 0.4 - 0.8;
-    const comp = addComponent(type, V(off, 2, 0), 0);
-    select(comp);
-    scheduleTrace();
-  });
-});
+    $('srcIntensity').addEventListener('input', e => {
+      sourceState.intensity = parseFloat(e.target.value);
+      $('vIntensity').textContent = sourceState.intensity.toFixed(1) + '×';
+      updateSourceVisual();
+      scheduleTrace();
+    });
 
-/* ---- Source controls ---- */
-const $ = id => document.getElementById(id);
+    $('srcRadius').addEventListener('input', e => {
+      sourceState.radius = parseFloat(e.target.value);
+      $('vRadius').textContent = sourceState.radius.toFixed(2);
+      scheduleTrace();
+    });
 
-$('lightModel').addEventListener('change', e=>{
-  lightModel = e.target.value;
-  $('modelNote').textContent = MODEL_NOTES[lightModel] || '';
-
-  if (lightModel === 'torch' && sourceState.spread === 0){
-    sourceState.spread = 14;
-    $('srcSpread').value = 14;
-    $('vSpread').textContent = '14°';
-  }
-
-  updateSourceVisual();
-  if (selected === sourceState) refreshInspector();
-  renderVisuals(performance.now() * 0.001);
-  scheduleTrace();
-});
-
-$('srcType').addEventListener('change', e=>{ sourceState.type = e.target.value; scheduleTrace(); });
-$('srcPol').addEventListener('change',  e=>{ sourceState.pol  = e.target.value; scheduleTrace(); });
-
-$('srcIntensity').addEventListener('input', e=>{
-  sourceState.intensity = parseFloat(e.target.value);
-  $('vIntensity').textContent = sourceState.intensity.toFixed(1) + '×';
-  updateSourceVisual();
-  scheduleTrace();
-});
-
-$('srcRadius').addEventListener('input', e=>{
-  sourceState.radius = parseFloat(e.target.value);
-  $('vRadius').textContent = sourceState.radius.toFixed(2);
-  scheduleTrace();
-});
-
-/* --- Ray count: log-scale slider --- */
-$('srcRays').addEventListener('input', e=>{
-  const logVal = parseFloat(e.target.value);
-  sourceState.rays = rayCountFromSlider(logVal);
-  $('vRays').textContent = formatRayCount(sourceState.rays);
-  // update the small note under the slider
-  if (sourceState.rays > HARD_RAY_CAP){
-    $('rayNote').textContent =
-      `Requested ${formatRayCount(sourceState.rays)} — clamped to ${formatRayCount(HARD_RAY_CAP)} for performance`;
-  } else {
-    $('rayNote').textContent = 'Log scale: 1 ray → 100,000,000 rays';
-  }
-  scheduleTrace();
-});
-
-$('srcSpread').addEventListener('input', e=>{
-  sourceState.spread = parseFloat(e.target.value);
-  $('vSpread').textContent = sourceState.spread + '°';
-  scheduleTrace();
-});
-
-/* ---- Ambient medium ---- */
-(function(){
-  const sel = $('ambient');
-  for (const k of Object.keys(MEDIA)){
-    const o = document.createElement('option');
-    o.value = k; o.textContent = MEDIA[k].label;
-    if (k === 'air') o.selected = true;
-    sel.appendChild(o);
-  }
-  sel.addEventListener('change', ()=>{
-    ambientMedium = MEDIA[sel.value];
-    scheduleTrace();
-  });
-})();
-
-/* ============================================================
-   8.  INTERACTION
-   ============================================================ */
-const raycaster = new THREE.Raycaster();
-const pointer   = new THREE.Vector2();
-const dragPlane = new THREE.Plane();
-const dragPt    = new THREE.Vector3();
-let dragState = null;
-
-function pointerRay(e){
-  const r = renderer.domElement.getBoundingClientRect();
-  pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-  pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
-  raycaster.setFromCamera(pointer, camera);
-  return raycaster.ray;
-}
-function pickRoots(){
-  const arr = components.map(c=>c.group);
-  arr.push(sourceGroup);
-  return arr;
-}
-
-renderer.domElement.addEventListener('pointerdown', e=>{
-  if (e.button !== 0) return;
-  const ray = pointerRay(e);
-  const hits = raycaster.intersectObjects(pickRoots(), true);
-  if (hits.length){
-    let o = hits[0].object;
-    while (o && !o.userData.comp) o = o.parent;
-    if (o){
-      select(o.userData.comp);
-      const g = o;
-      dragPlane.setFromNormalAndCoplanarPoint(V(0,1,0), g.position);
-      if (ray.intersectPlane(dragPlane, dragPt)){
-        dragState = { group: g, offset: g.position.clone().sub(dragPt),
-                      startY: g.position.y, startClientY: e.clientY };
-        controls.enabled = false;
+    /* --- Ray count: log-scale slider --- */
+    $('srcRays').addEventListener('input', e => {
+      const logVal = parseFloat(e.target.value);
+      sourceState.rays = rayCountFromSlider(logVal);
+      $('vRays').textContent = formatRayCount(sourceState.rays);
+      // update the small note under the slider
+      if (sourceState.rays > HARD_RAY_CAP) {
+        $('rayNote').textContent =
+          `Requested ${formatRayCount(sourceState.rays)} — clamped to ${formatRayCount(HARD_RAY_CAP)} for performance`;
+      } else {
+        $('rayNote').textContent = 'Log scale: 1 ray → 100,000,000 rays';
       }
-      return;
+      scheduleTrace();
+    });
+
+    $('srcSpread').addEventListener('input', e => {
+      sourceState.spread = parseFloat(e.target.value);
+      $('vSpread').textContent = sourceState.spread + '°';
+      scheduleTrace();
+    });
+
+    /* ---- Ambient medium ---- */
+    (function () {
+      const sel = $('ambient');
+      for (const k of Object.keys(MEDIA)) {
+        const o = document.createElement('option');
+        o.value = k; o.textContent = MEDIA[k].label;
+        if (k === 'air') o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.addEventListener('change', () => {
+        ambientMedium = MEDIA[sel.value];
+        scheduleTrace();
+      });
+    })();
+
+    /* ============================================================
+       8.  INTERACTION
+       ============================================================ */
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane();
+    const dragPt = new THREE.Vector3();
+    let dragState = null;
+
+    function pointerRay(e) {
+      const r = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+      pointer.y = -((e.clientY - r.top) / r.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      return raycaster.ray;
     }
-  }
-  select(null);
-});
-
-renderer.domElement.addEventListener('pointermove', e=>{
-  if (!dragState) return;
-  const g = dragState.group;
-  if (e.shiftKey){
-    const dy = e.clientY - dragState.startClientY;
-    g.position.y = clamp(dragState.startY - dy * 0.012, 0.1, 9);
-  } else {
-    dragPlane.setFromNormalAndCoplanarPoint(V(0,1,0), g.position);
-    const ray = pointerRay(e);
-    if (ray.intersectPlane(dragPlane, dragPt)){
-      g.position.copy(dragPt.add(dragState.offset));
+    function pickRoots() {
+      const arr = components.map(c => c.group);
+      arr.push(sourceGroup);
+      return arr;
     }
-  }
-  scheduleTrace();
-});
 
-window.addEventListener('pointerup', ()=>{
-  if (dragState){
-    dragState = null; controls.enabled = true;
-    refreshInspector();
-  }
-});
+    renderer.domElement.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      const ray = pointerRay(e);
+      const hits = raycaster.intersectObjects(pickRoots(), true);
+      if (hits.length) {
+        let o = hits[0].object;
+        while (o && !o.userData.comp) o = o.parent;
+        if (o) {
+          select(o.userData.comp);
+          const g = o;
+          dragPlane.setFromNormalAndCoplanarPoint(V(0, 1, 0), g.position);
+          if (ray.intersectPlane(dragPlane, dragPt)) {
+            dragState = {
+              group: g, offset: g.position.clone().sub(dragPt),
+              startY: g.position.y, startClientY: e.clientY
+            };
+            controls.enabled = false;
+          }
+          return;
+        }
+      }
+      select(null);
+    });
 
-window.addEventListener('keydown', e=>{
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selected && selected !== sourceState){
-    removeMonitor(selected);
-    scene.remove(selected.group);
-    const i = components.indexOf(selected);
-    if (i >= 0) components.splice(i,1);
-    selected = null;
+    renderer.domElement.addEventListener('pointermove', e => {
+      if (!dragState) return;
+      const g = dragState.group;
+      if (e.shiftKey) {
+        const dy = e.clientY - dragState.startClientY;
+        g.position.y = clamp(dragState.startY - dy * 0.012, 0.1, 9);
+      } else {
+        dragPlane.setFromNormalAndCoplanarPoint(V(0, 1, 0), g.position);
+        const ray = pointerRay(e);
+        if (ray.intersectPlane(dragPlane, dragPt)) {
+          g.position.copy(dragPt.add(dragState.offset));
+        }
+      }
+      scheduleTrace();
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (dragState) {
+        dragState = null; controls.enabled = true;
+        refreshInspector();
+      }
+    });
+
+    window.addEventListener('keydown', e => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selected && selected !== sourceState) {
+        removeMonitor(selected);
+        scene.remove(selected.group);
+        const i = components.indexOf(selected);
+        if (i >= 0) components.splice(i, 1);
+        selected = null;
+        refreshInspector();
+        scheduleTrace();
+      }
+    });
+
+    /* ============================================================
+       9.  BOOT + LOOP
+       ============================================================ */
+    // Initialise the slider display from the default ray count
+    (function initRaySlider() {
+      $('srcRays').value = sliderFromRayCount(sourceState.rays);
+      $('vRays').textContent = formatRayCount(sourceState.rays);
+    })();
+
+    addComponent('lens', V(0, 2, -0.5), 0);
+    addComponent('mirror', V(0, 2, 3.2), -Math.PI / 4);
+    addComponent('screen', V(3.4, 2, 3.2), -Math.PI / 2);
+
+    updateSourceVisual();
     refreshInspector();
     scheduleTrace();
-  }
-});
 
-/* ============================================================
-   9.  BOOT + LOOP
-   ============================================================ */
-// Initialise the slider display from the default ray count
-(function initRaySlider(){
-  $('srcRays').value = sliderFromRayCount(sourceState.rays);
-  $('vRays').textContent = formatRayCount(sourceState.rays);
-})();
+    addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
 
-addComponent('lens',   V(0, 2, -0.5), 0);
-addComponent('mirror', V(0, 2,  3.2), -Math.PI/4);
-addComponent('screen', V(3.4, 2, 3.2), -Math.PI/2);
-
-updateSourceVisual();
-refreshInspector();
-scheduleTrace();
-
-addEventListener('resize', ()=>{
-  camera.aspect = innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-function animate(){
-  requestAnimationFrame(animate);
-  controls.update();
-  if (lightModel === 'wave'){
-    renderVisuals(performance.now() * 0.001);
-  }
-  renderer.render(scene, camera);
-}
-animate();
-</script>
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      if (lightModel === 'wave') {
+        renderVisuals(performance.now() * 0.001);
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
 </body>
+
 </html>
