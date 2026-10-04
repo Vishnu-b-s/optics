@@ -33,6 +33,17 @@ export default function OpticsLab() {
     <>
       <canvas id="c"></canvas>
 
+      <div id="mobileWarning" className="mobile-warning">
+        <div className="mobile-warning-content">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+            <path d="M12 18h.01"></path>
+          </svg>
+          <h2>Screen too narrow</h2>
+          <p>Please rotate your phone to landscape mode, or expand your window to view the 3D Optics Lab.</p>
+        </div>
+      </div>
+
       <div id="panel">
         <h1>3D <span>Optics</span> Lab</h1>
 

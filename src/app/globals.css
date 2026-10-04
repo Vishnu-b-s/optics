@@ -433,3 +433,55 @@ hr {
   from { opacity: 0; transform: translateY(5px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+.mobile-warning {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+}
+
+.mobile-warning-content {
+  max-width: 300px;
+}
+
+.mobile-warning-content svg {
+  color: var(--acc);
+  margin-bottom: 20px;
+  animation: tilt 2.5s ease-in-out infinite;
+}
+
+@keyframes tilt {
+  0%, 100% { transform: rotate(0deg); }
+  30%, 70% { transform: rotate(-90deg); }
+}
+
+.mobile-warning h2 {
+  font-size: 18px;
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.mobile-warning p {
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  #panel, #monitors, #hud, #traceLoading, canvas#c {
+    display: none !important;
+  }
+  .mobile-warning {
+    display: flex;
+  }
+}
+
