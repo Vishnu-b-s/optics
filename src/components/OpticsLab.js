@@ -1014,6 +1014,11 @@ function initOpticsLab() {
     // Render the visuals
     renderVisuals(performance.now() * 0.001);
     updateReadout();
+
+    if (traceRequested) {
+      traceRequested = false;
+      doTrace();
+    }
   }
 
   function doTrace() {
@@ -1031,14 +1036,14 @@ function initOpticsLab() {
     }
   }
 
+  let traceRequested = false;
+
   function scheduleTrace() {
-    if (traceScheduled) return;
-    traceScheduled = true;
-    // Debounce: wait a tick so multiple rapid changes batch into one trace
-    setTimeout(() => {
-      traceScheduled = false;
+    if (isTracing) {
+      traceRequested = true;
+    } else {
       doTrace();
-    }, 150);
+    }
   }
 
   /* ============================================================
