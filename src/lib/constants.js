@@ -18,10 +18,10 @@ export function nOf(medium, wlNm) {
 
 /* Ray-tracing limits */
 export const MAX_DEPTH     = 22;
-export const MAX_TRACE_SEGS = 500000;
-export const MAX_PROC      = 3000000;
+export const MAX_TRACE_SEGS = 100000;
+export const MAX_PROC      = 500000;
 export const MIN_INT       = 0.0025;
-export const HARD_RAY_CAP  = 200000;
+export const HARD_RAY_CAP  = 50000;
 export const SCREEN_RES    = 256;
 
 /* Color filter transmission functions */
@@ -92,4 +92,5 @@ export const COMPONENT_DEFAULTS = {
   filter:       { color: 'red' },
   screen:       { gain: 1.0 },
   detector:     { gain: 1.0 },
+  doubleslit:   { slitWidth: 0.08, slitSep: 0.4, barrierWidth: 2.0, barrierHeight: 2.0 },
 };

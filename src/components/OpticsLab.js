@@ -83,12 +83,15 @@ export default function OpticsLab() {
           <button data-add="polarizer">Polarizer</button>
           <button data-add="halfwave">½-wave plate</button>
           <button data-add="quarterwave">¼-wave plate</button>
-          <button data-add="lens">Lens</button>
+          <button data-add="lens">Lens (convex)</button>
+          <button data-add="concavelens">Lens (concave)</button>
           <button data-add="prism">Prism</button>
           <button data-add="block">Glass block</button>
           <button data-add="filter">Color filter</button>
           <button data-add="screen">Screen</button>
           <button data-add="detector">Detector</button>
+          <button data-add="doubleslit">Double slit</button>
+          <button data-add="convexmirror">Convex mirror</button>
         </div>
 
         <h2>Environment</h2>
@@ -215,6 +218,17 @@ function initOpticsLab() {
     })));
   }
 
+  function buildConvexMirror(comp) {
+    clearGroup(comp.group);
+    const A = comp.params.aperture, R = comp.params.curvature;
+    const thMax = Math.asin(clamp(A / R, 0, 1));
+    const geo = new THREE.SphereGeometry(R, 48, 24, 0, Math.PI * 2, 0, thMax);
+    geo.rotateX(Math.PI / 2); geo.translate(0, 0, -R);
+    comp.group.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+      color: 0xd8e8ff, metalness: 1, roughness: 0.05, side: THREE.DoubleSide
+    })));
+  }
+
   function buildBeamsplitter(comp) {
     clearGroup(comp.group);
     const w = 1.8, h = 1.8;
@@ -261,6 +275,23 @@ function initOpticsLab() {
     })));
   }
 
+  function buildConcaveLens(comp) {
+    clearGroup(comp.group);
+    const A = comp.params.aperture, R = comp.params.curvature, t = comp.params.thickness || 0.2;
+    const z_edge = R + t / 2 - Math.sqrt(R * R - A * A);
+    const pts = [];
+    const N = 26;
+    for (let i = N; i >= 0; i--) { const r = A * i / N; pts.push(new THREE.Vector2(r, t/2 + R - Math.sqrt(R * R - r * r))); }
+    pts.push(new THREE.Vector2(A, z_edge));
+    pts.push(new THREE.Vector2(A, -z_edge));
+    for (let i = 0; i <= N; i++) { const r = A * i / N; pts.push(new THREE.Vector2(r, -t/2 - R + Math.sqrt(R * R - r * r))); }
+    const geo = new THREE.LatheGeometry(pts, 56); geo.rotateX(Math.PI / 2);
+    comp.group.add(new THREE.Mesh(geo, new THREE.MeshPhysicalMaterial({
+      color: 0xbfe4ff, metalness: 0, roughness: 0.04,
+      transparent: true, opacity: 0.30, side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.05
+    })));
+  }
+
   function buildPrism(comp) {
     clearGroup(comp.group);
     const side = 2.0, height = 2.0, Rt = side / Math.sqrt(3);
@@ -289,6 +320,63 @@ function initOpticsLab() {
     const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.02),
       new THREE.MeshStandardMaterial({ color: 0x22334d, roughness: 0.7 }));
     fr.position.z = -0.04; comp.group.add(fr);
+  }
+
+  function buildDoubleSlit(comp) {
+    clearGroup(comp.group);
+    const bw = comp.params.barrierWidth;
+    const bh = comp.params.barrierHeight;
+    const slitW = comp.params.slitWidth;
+    const sep = comp.params.slitSep;
+    const thickness = 0.06;
+    const halfSep = sep / 2;
+    const halfSlitW = slitW / 2;
+    const barrierMat = new THREE.MeshStandardMaterial({
+      color: 0x1a1a2e, metalness: 0.7, roughness: 0.3
+    });
+    // Left barrier: from -bw/2 to -(halfSep + halfSlitW)
+    const leftW = bw / 2 - halfSep - halfSlitW;
+    if (leftW > 0.001) {
+      const leftMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(leftW, bh, thickness), barrierMat
+      );
+      leftMesh.position.x = -bw / 2 + leftW / 2;
+      comp.group.add(leftMesh);
+    }
+    // Center barrier: from -(halfSep - halfSlitW) to +(halfSep - halfSlitW)
+    const centerW = sep - slitW;
+    if (centerW > 0.001) {
+      const centerMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(centerW, bh, thickness), barrierMat
+      );
+      comp.group.add(centerMesh);
+    }
+    // Right barrier: from (halfSep + halfSlitW) to +bw/2
+    const rightW = bw / 2 - halfSep - halfSlitW;
+    if (rightW > 0.001) {
+      const rightMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(rightW, bh, thickness), barrierMat
+      );
+      rightMesh.position.x = bw / 2 - rightW / 2;
+      comp.group.add(rightMesh);
+    }
+    // Slit glow indicators
+    const slitGlowMat = new THREE.MeshBasicMaterial({
+      color: 0x4488ff, transparent: true, opacity: 0.25
+    });
+    for (const sx of [-1, 1]) {
+      const glow = new THREE.Mesh(
+        new THREE.BoxGeometry(slitW, bh * 0.95, thickness * 0.5), slitGlowMat
+      );
+      glow.position.x = sx * halfSep;
+      glow.position.z = 0.001;
+      comp.group.add(glow);
+    }
+    // Frame
+    const frameMat = new THREE.MeshStandardMaterial({ color: 0x22334d, roughness: 0.7 });
+    const fr = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.12, bh + 0.12, 0.03), frameMat);
+    fr.position.z = -0.04;
+    comp.group.add(fr);
   }
 
   function initScreenAccum(comp) {
@@ -433,6 +521,33 @@ function initOpticsLab() {
       label: 'Detector', build: buildDetector,
       defaults: { gain: 1.0 },
       defs: [{ key: 'gain', label: 'Gain', type: 'range', min: 0.1, max: 8, step: 0.1 }]
+    },
+    doubleslit: {
+      label: 'Double slit', build: buildDoubleSlit,
+      defaults: { slitWidth: 0.08, slitSep: 0.4, barrierWidth: 2.0, barrierHeight: 2.0 },
+      defs: [
+        { key: 'slitWidth', label: 'Slit width', type: 'range', min: 0.01, max: 0.3, step: 0.01 },
+        { key: 'slitSep', label: 'Slit separation', type: 'range', min: 0.1, max: 1.5, step: 0.02 },
+        { key: 'barrierWidth', label: 'Barrier width', type: 'range', min: 1.0, max: 4.0, step: 0.1 },
+        { key: 'barrierHeight', label: 'Barrier height', type: 'range', min: 1.0, max: 4.0, step: 0.1 }
+      ]
+    },
+    convexmirror: {
+      label: 'Convex mirror', build: buildConvexMirror,
+      defaults: { aperture: 0.85, curvature: 2.6, reflectivity: 0.95 },
+      defs: [
+        { key: 'aperture', label: 'Aperture', type: 'range', min: 0.2, max: 1.6, step: 0.05 },
+        { key: 'curvature', label: 'Curvature R', type: 'range', min: 1.2, max: 6, step: 0.1 },
+        { key: 'reflectivity', label: 'Reflectivity', type: 'range', min: 0.05, max: 1, step: 0.01 }]
+    },
+    concavelens: {
+      label: 'Concave lens', build: buildConcaveLens,
+      defaults: { aperture: 0.7, curvature: 2.5, thickness: 0.2, material: 'glass' },
+      defs: [
+        { key: 'aperture', label: 'Aperture', type: 'range', min: 0.25, max: 1.3, step: 0.05 },
+        { key: 'curvature', label: 'Curvature R', type: 'range', min: 1.2, max: 6, step: 0.1 },
+        { key: 'thickness', label: 'Thickness', type: 'range', min: 0.05, max: 1.0, step: 0.05 },
+        { key: 'material', label: 'Material', type: 'material' }]
     }
   };
 
@@ -822,12 +937,27 @@ function initOpticsLab() {
   }
 
   /* ============================================================
-     6. API TRACE CALL
+     6. API TRACE CALL (Web Worker)
      ============================================================ */
   let traceScheduled = false;
-  let traceAbortController = null;
   let isTracing = false;
+  let traceNonce = 0;
   const loadingEl = document.getElementById('traceLoading');
+
+  const traceWorker = new Worker(new URL('../lib/trace.worker.js', import.meta.url), { type: 'module' });
+  
+  traceWorker.onmessage = (e) => {
+    const msg = e.data;
+    if (msg.type === 'success') {
+      if (msg.nonce === traceNonce) {
+        handleTraceResult(msg.result);
+      }
+    } else if (msg.type === 'error') {
+      console.error('Worker trace error:', msg.error);
+      isTracing = false;
+      loadingEl.style.display = 'none';
+    }
+  };
 
   function serializeSceneForTrace() {
     scene.updateMatrixWorld(true);
@@ -858,64 +988,44 @@ function initOpticsLab() {
     };
   }
 
-  async function doTrace() {
-    // Cancel any in-flight trace
-    if (traceAbortController) {
-      traceAbortController.abort();
-    }
-    traceAbortController = new AbortController();
+  function handleTraceResult(result) {
+    isTracing = false;
+    loadingEl.style.display = 'none';
 
-    isTracing = true;
-    loadingEl.style.display = 'flex';
+    // Store segments for visualization
+    traceSegments = result.segments;
 
-    try {
-      const body = serializeSceneForTrace();
-      const response = await fetch('/api/trace', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: traceAbortController.signal,
-      });
+    // Apply screen/detector data
+    for (const comp of components) {
+      if ((comp.type === 'screen' || comp.type === 'detector') && result.screenData[comp.id]) {
+        const sd = result.screenData[comp.id];
+        comp.hitCount = sd.hitCount;
+        comp.totalPower = sd.totalPower;
+        comp.peak = sd.peak;
+        comp.illuminatedPixels = sd.illuminatedPixels;
 
-      if (!response.ok) {
-        console.error('Trace API error:', response.status);
-        return;
-      }
-
-      const result = await response.json();
-
-      // Store segments for visualization
-      traceSegments = result.segments;
-
-      // Apply screen/detector data
-      for (const comp of components) {
-        if ((comp.type === 'screen' || comp.type === 'detector') && result.screenData[comp.id]) {
-          const sd = result.screenData[comp.id];
-          comp.hitCount = sd.hitCount;
-          comp.totalPower = sd.totalPower;
-          comp.peak = sd.peak;
-          comp.illuminatedPixels = sd.illuminatedPixels;
-
-          // Decode base64 accumulator
-          if (sd.accumBase64 && comp.screenCtx) {
-            const binaryStr = atob(sd.accumBase64);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-            comp.accum = new Float32Array(bytes.buffer);
-            flushScreen(comp);
-          }
+        if (sd.accum && comp.screenCtx) {
+          comp.accum = sd.accum;
+          flushScreen(comp);
         }
       }
+    }
 
-      // Render the visuals
-      renderVisuals(performance.now() * 0.001);
-      updateReadout();
+    // Render the visuals
+    renderVisuals(performance.now() * 0.001);
+    updateReadout();
+  }
 
+  function doTrace() {
+    isTracing = true;
+    loadingEl.style.display = 'flex';
+    traceNonce++;
+    
+    try {
+      const body = serializeSceneForTrace();
+      traceWorker.postMessage({ nonce: traceNonce, body });
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('Trace error:', err);
-      }
-    } finally {
+      console.error('Failed to start trace:', err);
       isTracing = false;
       loadingEl.style.display = 'none';
     }
@@ -928,7 +1038,7 @@ function initOpticsLab() {
     setTimeout(() => {
       traceScheduled = false;
       doTrace();
-    }, 50);
+    }, 150);
   }
 
   /* ============================================================

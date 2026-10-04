@@ -205,6 +205,13 @@ function buildLocalSurfaces(comp) {
         behavior: 'mirror', reflectivity: p.reflectivity
       }];
     }
+    case 'convexmirror': {
+      const A = p.aperture, R = p.curvature;
+      return [{
+        kind: 'sphere', c: V(0, 0, -R), R, axis: V(0, 0, 1), aperture: A,
+        behavior: 'mirror', reflectivity: p.reflectivity
+      }];
+    }
     case 'beamsplitter': {
       const w = 1.8, h = 1.8;
       return [{
@@ -249,6 +256,14 @@ function buildLocalSurfaces(comp) {
       return [
         { kind: 'sphere', c: V(0, 0, zc1), R, axis: V(0, 0, -1), aperture: A, behavior: 'dielectric' },
         { kind: 'sphere', c: V(0, 0, zc2), R, axis: V(0, 0, 1),  aperture: A, behavior: 'dielectric' },
+      ];
+    }
+    case 'concavelens': {
+      const A = p.aperture, R = p.curvature, t = p.thickness || 0.2;
+      return [
+        { kind: 'sphere', c: V(0, 0, R + t / 2), R, axis: V(0, 0, -1), aperture: A, behavior: 'dielectric' },
+        { kind: 'sphere', c: V(0, 0, -R - t / 2), R, axis: V(0, 0, 1),  aperture: A, behavior: 'dielectric' },
+        { kind: 'cylinder', c: V(0, 0, 0), R: A, h: t / 2 + R - Math.sqrt(R * R - A * A), axis: V(0, 0, 1), behavior: 'dielectric' }
       ];
     }
     case 'prism': {
@@ -307,6 +322,20 @@ function buildLocalSurfaces(comp) {
         behavior: 'detector'
       }];
     }
+    case 'doubleslit': {
+      const sw = p.slitWidth;
+      const sep = p.slitSep;
+      const bw = p.barrierWidth;
+      const bh = p.barrierHeight;
+      // The barrier is one big rect; behavior decides if a ray passes or is blocked
+      return [{
+        kind: 'rect', o: V(0, 0, 0), e1: V(1, 0, 0), e2: V(0, 1, 0),
+        h1: bw / 2, h2: bh / 2, n: V(0, 0, 1),
+        behavior: 'doubleslit',
+        slitWidth: sw, slitSep: sep,
+        barrierWidth: bw, barrierHeight: bh
+      }];
+    }
     default:
       return [];
   }
@@ -343,13 +372,19 @@ function collectSurfaces(components, ambientMediumKey) {
         if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
         if (s.retardance !== undefined) ws.retardance = s.retardance;
         if (s.filterColor !== undefined) ws.filterColor = s.filterColor;
-      } else {
+      } else if (s.kind === 'sphere') {
         ws.kind = 'sphere';
         ws.c = applyMat4(M, s.c);
         ws.R = s.R;
         ws.axis = applyMat3(NM, s.axis);
         ws.aperture = s.aperture;
         if (s.reflectivity !== undefined) ws.reflectivity = s.reflectivity;
+      } else if (s.kind === 'cylinder') {
+        ws.kind = 'cylinder';
+        ws.c = applyMat4(M, s.c);
+        ws.R = s.R;
+        ws.h = s.h;
+        ws.axis = applyMat3(NM, s.axis);
       }
       ws.invM = invM;
       out.push(ws);
@@ -372,7 +407,7 @@ function intersectSurf(s, o, d) {
     if (Math.abs(vDot(rel, s.e1)) > s.h1) return null;
     if (Math.abs(vDot(rel, s.e2)) > s.h2) return null;
     return t;
-  } else {
+  } else if (s.kind === 'sphere') {
     const oc = vSub(o, s.c);
     const b = vDot(oc, d);
     const c = vDot(oc, oc) - s.R * s.R;
@@ -391,6 +426,28 @@ function intersectSurf(s, o, d) {
       return t;
     }
     return null;
+  } else if (s.kind === 'cylinder') {
+    const oc = vSub(o, s.c);
+    const dPara = vDot(d, s.axis);
+    const dPerp = vSub(d, vScale(s.axis, dPara));
+    const ocPara = vDot(oc, s.axis);
+    const ocPerp = vSub(oc, vScale(s.axis, ocPara));
+
+    const a = vDot(dPerp, dPerp);
+    if (a < 1e-10) return null;
+    const b = 2 * vDot(ocPerp, dPerp);
+    const c = vDot(ocPerp, ocPerp) - s.R * s.R;
+    const disc = b * b - 4 * a * c;
+    if (disc < 0) return null;
+    const sq = Math.sqrt(disc);
+    for (const t of [(-b - sq) / (2 * a), (-b + sq) / (2 * a)]) {
+      if (t < 1e-5) continue;
+      const p = vAddScaled(o, d, t);
+      const proj = vDot(vSub(p, s.c), s.axis);
+      if (Math.abs(proj) > s.h) continue;
+      return t;
+    }
+    return null;
   }
 }
 
@@ -402,7 +459,15 @@ function nearestHit(o, d, surfaces) {
   }
   if (!bestS) return null;
   const p = vAddScaled(o, d, bestT);
-  const n = (bestS.kind === 'rect') ? vClone(bestS.n) : vNorm(vSub(p, bestS.c));
+  let n;
+  if (bestS.kind === 'rect') n = vClone(bestS.n);
+  else if (bestS.kind === 'cylinder') {
+    const pc = vSub(p, bestS.c);
+    const proj = vDot(pc, bestS.axis);
+    n = vNorm(vSub(pc, vScale(bestS.axis, proj)));
+  } else {
+    n = vNorm(vSub(p, bestS.c));
+  }
   return { surf: bestS, t: bestT, p, n };
 }
 
@@ -612,6 +677,59 @@ function stepRay(ray, surfaces, queue, segments, screenAccums, ambientMedium) {
       }
       break;
     }
+    case 'doubleslit': {
+      // Determine local hit position on the barrier
+      const localP = surf.invM ? applyMat4(surf.invM, p) : p;
+      const lx = localP.x;  // horizontal position relative to center
+      const ly = localP.y;  // vertical position
+      const halfSep = surf.compParams.slitSep / 2;
+      const halfSlitW = surf.compParams.slitWidth / 2;
+      const halfBarrierH = (surf.compParams.barrierHeight || 2.0) / 2;
+
+      // Check if the ray passes through either slit
+      // Slit 1 centered at x = -halfSep, Slit 2 centered at x = +halfSep
+      // Slits extend full height vertically
+      const inSlit1 = (lx >= -halfSep - halfSlitW && lx <= -halfSep + halfSlitW);
+      const inSlit2 = (lx >= halfSep - halfSlitW && lx <= halfSep + halfSlitW);
+
+      if (inSlit1 || inSlit2) {
+        // Ray passes through the slit — apply single-slit diffraction spread
+        const slitW = surf.compParams.slitWidth;
+        // Approximate diffraction: angular spread ~ lambda / slitWidth
+        const lambdaM = wl * 1e-9;  // wavelength in meters
+        const slitM = slitW;        // slit width in scene units (treat as relative)
+        const diffAngle = Math.min(0.15, lambdaM / slitM * 1e6 * 0.5); // scaled for visibility
+
+        // Spawn a few diffracted rays spread around the main direction
+        const nDiffracted = 5;
+        const totalI = J_intensity(J);
+        const perRayFrac = 1.0 / nDiffracted;
+
+        for (let di = 0; di < nDiffracted; di++) {
+          // Spread: evenly from -diffAngle to +diffAngle
+          const frac = (di / (nDiffracted - 1)) - 0.5; // -0.5 to +0.5
+          const angle = frac * 2 * diffAngle;
+
+          // Rotate direction around the slit's vertical axis (e2 = up)
+          const cosA = Math.cos(angle), sinA = Math.sin(angle);
+          // sNew is perpendicular to d in the plane of incidence
+          const dDiff = vNorm(vAdd(vScale(d, cosA), vScale(sNew, sinA)));
+
+          // Weight: Gaussian-like envelope for diffraction intensity
+          const w2 = Math.exp(-frac * frac * 8);
+          const k = Math.sqrt(perRayFrac * w2);
+          const Jd = J_scale(J, k, k);
+          if (J_intensity(Jd) < MIN_INT) continue;
+
+          queue.push({
+            o: vAddScaled(p, dDiff, eps), d: dDiff, s: arbitraryPerp(dDiff),
+            J: Jd, wl, inside: ray.inside, depth, r0: ray.r0
+          });
+        }
+      }
+      // Rays hitting the barrier (not through slits) are simply absorbed — no action needed
+      break;
+    }
   }
 }
 
@@ -783,14 +901,16 @@ export function doTrace(requestBody) {
     sa.peak = peak;
     sa.illuminatedPixels = lit;
 
-    // Convert Float32Array to base64 for transport
-    const buf = Buffer.from(sa.accum.buffer);
+    sa.peak = peak;
+    sa.illuminatedPixels = lit;
+
+    // Do not use Buffer here so it can run in a Web Worker
     screenData[compId] = {
       hitCount: sa.hitCount,
       totalPower: sa.totalPower,
       peak,
       illuminatedPixels: lit,
-      accumBase64: buf.toString('base64'),
+      accum: sa.accum, // Return the Float32Array
     };
   }
 

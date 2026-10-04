@@ -25,9 +25,21 @@ export async function POST(request) {
     }
 
     // Run the trace
+    const t0 = Date.now();
     const result = doTrace(body);
+    const elapsed = Date.now() - t0;
 
-    return Response.json(result);
+    // Convert accum arrays to base64 for JSON transport
+    for (const compId in result.screenData) {
+      const sa = result.screenData[compId];
+      if (sa.accum) {
+        const buf = Buffer.from(sa.accum.buffer);
+        sa.accumBase64 = buf.toString('base64');
+        delete sa.accum;
+      }
+    }
+
+    return Response.json({ ...result, traceTimeMs: elapsed });
   } catch (err) {
     console.error('Trace API error:', err);
     return Response.json(
