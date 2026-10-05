@@ -622,7 +622,8 @@ function stepRay(ray, surfaces, queue, segments, screenAccums, ambientMedium) {
       const compId = surf.compId;
       if (screenAccums[compId] && surf.invM) {
         const local = applyMat4(surf.invM, p);
-        const u = local.x, v = local.y;
+        const zoom = surf.compParams.zoom || 1.0;
+        const u = local.x * zoom, v = local.y * zoom;
         const N = SCREEN_RES;
         const px2 = Math.floor((u / surf.h1 * 0.5 + 0.5) * N);
         const py2 = Math.floor((0.5 - v / surf.h2 * 0.5) * N);

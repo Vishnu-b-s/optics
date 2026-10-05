@@ -525,8 +525,11 @@ function initOpticsLab() {
     },
     screen: {
       label: 'Screen', build: buildScreen,
-      defaults: { gain: 1.0 },
-      defs: [{ key: 'gain', label: 'Gain', type: 'range', min: 0.1, max: 8, step: 0.1 }]
+      defaults: { gain: 1.0, zoom: 1.0 },
+      defs: [
+        { key: 'gain', label: 'Gain', type: 'range', min: 0.1, max: 8, step: 0.1 },
+        { key: 'zoom', label: 'Zoom', type: 'range', min: 0.5, max: 20, step: 0.1 }
+      ]
     },
     detector: {
       label: 'Detector', build: buildDetector,
